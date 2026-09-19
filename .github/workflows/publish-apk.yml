@@ -20,7 +20,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          curl -L --fail --retry 3 'https://sdmntprdenmarkeast.oaiusercontent.com/files/00000000-c0a0-8210-9c37-4c8558094a5e/raw?se=2026-09-19T16%3A32%3A44Z&sp=r&sv=2026-02-06&sr=b&scid=8964d431-3c0d-5774-8424-3c9a8b15bdf6&skoid=002823aa-689d-47ca-9347-108c20f4f00d&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-19T09%3A24%3A53Z&ske=2026-09-20T09%3A24%3A53Z&sks=b&skv=2026-02-06&sig=iA8oCbBEDewxwKcw7S4phPMvCl/NsX6hC4GOSVBXPi0%3D' -o /tmp/apk.zip
+          curl -L --fail --retry 3 'https://sdmntprukwest.oaiusercontent.com/files/00000000-3fc0-8243-94ac-bdc9c1af8465/raw?se=2026-09-19T17%3A11%3A01Z&sp=r&sv=2026-02-06&sr=b&scid=795a0968-1a95-5cab-ae7d-5d08b1bd093f&skoid=002823aa-689d-47ca-9347-108c20f4f00d&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-19T05%3A57%3A05Z&ske=2026-09-20T05%3A57%3A05Z&sks=b&skv=2026-02-06&sig=wpVi1fsC0vxA2FzeBYooygPMulEUxzlmK%2Bs%2BM1ul96E%3D' -o /tmp/apk.zip
           mkdir -p /tmp/apk
           unzip -o /tmp/apk.zip -d /tmp/apk
           APK=$(find /tmp/apk -type f -name '*.apk' | head -1)
