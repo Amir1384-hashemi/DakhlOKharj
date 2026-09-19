@@ -36,6 +36,8 @@ jobs:
           test -f dakhlokharj/app/src/main/res/drawable/ic_launcher_dakhlokharj.png
           grep -q 'versionName = "0.2.1"' dakhlokharj/app/build.gradle.kts
           echo "DakhlOKharj v0.2.1 source verified."
+          python3 ci/dakhlokharj/patch-v021.py
+          echo "Jalali report patch applied."
 
       - name: Use Android 36 compatible build versions
         shell: bash
