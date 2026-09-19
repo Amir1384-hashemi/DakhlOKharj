@@ -32,44 +32,35 @@ jobs:
           import base64, io, zipfile
 
           root = Path("ci/dakhlokharj")
-          prefix = "".join((root / n).read_text() for n in [
-              "source.part1.b64", "source.part2.b64", "source.part3.b64", "source.part4.b64"
-          ])
-          suspect = (root / "source.part5a1.b64").read_text()
-          suffix = "".join((root / n).read_text() for n in [
-              "source.part5a2.b64", "source.part5b.b64", "source.part5c.b64",
-              "source.part6a.b64", "source.part6b.b64", "source.part6c.b64",
-              "source.part7a.b64", "source.part7b1.b64", "source.part7b2.b64", "source.part7c.b64"
-          ])
+          def read(name):
+              return (root / name).read_text()
 
+          p2_original = read("source.part2.b64")
+          text = "".join([
+              read("source.part1.b64"),
+              read("source.part2a1.b64"), read("source.part2a2.b64"), p2_original[3000:],
+              read("source.part3.b64"), read("source.part4.b64"),
+              read("source.part5a1.b64"), read("source.part5a2.b64"), read("source.part5b.b64"), read("source.part5c.b64"),
+              read("source.part6a.b64"), read("source.part6b.b64"), read("source.part6c.b64"),
+              read("source.part7a.b64"), read("source.part7b1.b64"), read("source.part7b2.b64"), read("source.part7c.b64"),
+          ])
+          if len(text) != 60180:
+              raise SystemExit(f"Unexpected payload length: {len(text)}")
+          raw = base64.b64decode(text, validate=True)
           required = {
               "dakhlokharj/settings.gradle.kts",
               "dakhlokharj/app/build.gradle.kts",
               "dakhlokharj/app/src/main/AndroidManifest.xml",
               "dakhlokharj/app/src/main/res/drawable/ic_launcher_dakhlokharj.webp",
           }
-
-          archive = None
-          removed = None
-          for i in range(len(suspect)):
-              text = prefix + suspect[:i] + suspect[i+1:] + suffix
-              try:
-                  raw = base64.b64decode(text, validate=True)
-                  with zipfile.ZipFile(io.BytesIO(raw)) as zf:
-                      if zf.testzip() is None and required.issubset(set(zf.namelist())):
-                          archive = raw
-                          removed = i
-                          break
-              except Exception:
-                  pass
-
-          if archive is None:
-              raise SystemExit("Could not reconstruct a valid source archive.")
-
-          Path("/tmp/dakhlokharj-source.zip").write_bytes(archive)
-          print(f"Source archive reconstructed; ignored one transfer character at offset {removed}.")
-          with zipfile.ZipFile(io.BytesIO(archive)) as zf:
+          with zipfile.ZipFile(io.BytesIO(raw)) as zf:
+              bad = zf.testzip()
+              if bad is not None:
+                  raise SystemExit(f"Corrupt archive member: {bad}")
+              if not required.issubset(set(zf.namelist())):
+                  raise SystemExit("Required project files are missing from source archive.")
               zf.extractall(".")
+          print("Source archive verified and extracted.")
           PY
           test -f dakhlokharj/settings.gradle.kts
           test -f dakhlokharj/app/build.gradle.kts
