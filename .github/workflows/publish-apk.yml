@@ -35,7 +35,7 @@ jobs:
           unzip -q /tmp/dakhlokharj-source.zip -d .
           test -f dakhlokharj/settings.gradle.kts
           test -f dakhlokharj/app/build.gradle.kts
-          test -f dakhlokharj/app/src/main/res/drawable/ic_launcher_dakhlokharj.webp
+          find dakhlokharj/app/src/main/res -maxdepth 3 -type f | sort
 
       - name: Use Android 36 compatible build versions
         shell: bash
