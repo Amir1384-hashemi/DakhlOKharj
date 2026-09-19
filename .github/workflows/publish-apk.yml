@@ -1,0 +1,44 @@
+name: Publish APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/publish-apk.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download APK artifact ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -L --fail --retry 3 'https://sdmntprdenmarkeast.oaiusercontent.com/files/00000000-c0a0-8210-9c37-4c8558094a5e/raw?se=2026-09-19T16%3A32%3A44Z&sp=r&sv=2026-02-06&sr=b&scid=8964d431-3c0d-5774-8424-3c9a8b15bdf6&skoid=002823aa-689d-47ca-9347-108c20f4f00d&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-19T09%3A24%3A53Z&ske=2026-09-20T09%3A24%3A53Z&sks=b&skv=2026-02-06&sig=iA8oCbBEDewxwKcw7S4phPMvCl/NsX6hC4GOSVBXPi0%3D' -o /tmp/apk.zip
+          mkdir -p /tmp/apk
+          unzip -o /tmp/apk.zip -d /tmp/apk
+          APK=$(find /tmp/apk -type f -name '*.apk' | head -1)
+          test -n "$APK"
+          mkdir -p releases
+          cp "$APK" releases/DakhlOKharj-MVP-debug.apk
+          sha256sum releases/DakhlOKharj-MVP-debug.apk > releases/DakhlOKharj-MVP-debug.apk.sha256
+
+      - name: Commit public APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add releases/
+          if git diff --cached --quiet; then
+            echo "APK already up to date"
+          else
+            git commit -m "Publish DakhlOKharj APK"
+            git push
+          fi
