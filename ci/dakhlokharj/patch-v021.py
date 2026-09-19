@@ -108,3 +108,89 @@ if "fun jalaliToGregorian(" not in ftext:
     if anchor not in ftext:
         raise SystemExit("Formatter anchor not found")
     fmt.write_text(ftext.replace(anchor, fn + anchor))
+
+
+# v0.2.2: show income categories in reports
+old_agg = '''    val income = filtered.filter { it.type == TransactionType.INCOME }.sumOf { it.amountToman }
+    val expense = filtered.filter { it.type == TransactionType.EXPENSE }.sumOf { it.amountToman }
+    val groups = filtered.filter { it.type == TransactionType.EXPENSE }
+        .groupBy { it.categoryName ?: "بدون دسته" }
+        .mapValues { (_, list) -> list.sumOf { it.amountToman } }
+        .toList().sortedByDescending { it.second }
+    val max = groups.maxOfOrNull { it.second }?.coerceAtLeast(1L) ?: 1L
+'''
+new_agg = '''    val income = filtered.filter { it.type == TransactionType.INCOME }.sumOf { it.amountToman }
+    val expense = filtered.filter { it.type == TransactionType.EXPENSE }.sumOf { it.amountToman }
+    val incomeGroups = filtered.filter { it.type == TransactionType.INCOME }
+        .groupBy { it.categoryName ?: "بدون دسته" }
+        .mapValues { (_, list) -> list.sumOf { it.amountToman } }
+        .toList().sortedByDescending { it.second }
+    val expenseGroups = filtered.filter { it.type == TransactionType.EXPENSE }
+        .groupBy { it.categoryName ?: "بدون دسته" }
+        .mapValues { (_, list) -> list.sumOf { it.amountToman } }
+        .toList().sortedByDescending { it.second }
+    val incomeMax = incomeGroups.maxOfOrNull { it.second }?.coerceAtLeast(1L) ?: 1L
+    val expenseMax = expenseGroups.maxOfOrNull { it.second }?.coerceAtLeast(1L) ?: 1L
+'''
+if old_agg in text:
+    text = text.replace(old_agg, new_agg)
+
+old_ui = '''        item { SummaryCard("مانده", income - expense, Modifier.fillMaxWidth()) }
+        item { Text("هزینه‌ها بر اساس دسته", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) }
+        if (groups.isEmpty()) item { EmptyState("در این بازه هزینه‌ای ثبت نشده است.") }
+        else items(groups) { group ->
+            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(Modifier.fillMaxWidth()) {
+                    Text(group.first, Modifier.weight(1f))
+                    Text(formatToman(group.second), fontWeight = FontWeight.SemiBold)
+                }
+                LinearProgressIndicator(
+                    progress = { (group.second.toFloat() / max.toFloat()).coerceIn(0f, 1f) },
+                    modifier = Modifier.fillMaxWidth().height(8.dp)
+                )
+            }
+        }
+'''
+new_ui = '''        item { SummaryCard("مانده", income - expense, Modifier.fillMaxWidth()) }
+
+        item { Text("درآمدها بر اساس دسته", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) }
+        if (incomeGroups.isEmpty()) item { EmptyState("در این بازه درآمدی ثبت نشده است.") }
+        else items(incomeGroups) { group ->
+            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(Modifier.fillMaxWidth()) {
+                    Text(group.first, Modifier.weight(1f))
+                    Text(formatToman(group.second), fontWeight = FontWeight.SemiBold)
+                }
+                LinearProgressIndicator(
+                    progress = { (group.second.toFloat() / incomeMax.toFloat()).coerceIn(0f, 1f) },
+                    modifier = Modifier.fillMaxWidth().height(8.dp)
+                )
+            }
+        }
+
+        item { Text("هزینه‌ها بر اساس دسته", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) }
+        if (expenseGroups.isEmpty()) item { EmptyState("در این بازه هزینه‌ای ثبت نشده است.") }
+        else items(expenseGroups) { group ->
+            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(Modifier.fillMaxWidth()) {
+                    Text(group.first, Modifier.weight(1f))
+                    Text(formatToman(group.second), fontWeight = FontWeight.SemiBold)
+                }
+                LinearProgressIndicator(
+                    progress = { (group.second.toFloat() / expenseMax.toFloat()).coerceIn(0f, 1f) },
+                    modifier = Modifier.fillMaxWidth().height(8.dp)
+                )
+            }
+        }
+'''
+if old_ui in text:
+    text = text.replace(old_ui, new_ui)
+
+text = text.replace('item { Text("نسخه ۰.۲.۱") }', 'item { Text("نسخه ۰.۲.۲") }')
+app.write_text(text)
+
+gradle = Path("dakhlokharj/app/build.gradle.kts")
+gtext = gradle.read_text()
+gtext = gtext.replace("versionCode = 3", "versionCode = 4")
+gtext = gtext.replace('versionName = "0.2.1"', 'versionName = "0.2.2"')
+gradle.write_text(gtext)
