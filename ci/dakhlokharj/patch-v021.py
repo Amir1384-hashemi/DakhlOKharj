@@ -111,6 +111,7 @@ if "fun jalaliToGregorian(" not in ftext:
 
 
 # v0.2.2: show income categories in reports
+text = app.read_text()
 old_agg = '''    val income = filtered.filter { it.type == TransactionType.INCOME }.sumOf { it.amountToman }
     val expense = filtered.filter { it.type == TransactionType.EXPENSE }.sumOf { it.amountToman }
     val groups = filtered.filter { it.type == TransactionType.EXPENSE }
