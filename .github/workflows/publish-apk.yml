@@ -15,7 +15,6 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 35
-
     env:
       ANDROID_HOME: /usr/local/lib/android/sdk
       ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
@@ -28,7 +27,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat             ci/dakhlokharj/source.part1.b64             ci/dakhlokharj/source.part2.b64             ci/dakhlokharj/source.part3.b64             ci/dakhlokharj/source.part4.b64             ci/dakhlokharj/source.part5.b64             ci/dakhlokharj/source.part6a.b64             ci/dakhlokharj/source.part6b.b64             ci/dakhlokharj/source.part6c.b64             ci/dakhlokharj/source.part7a.b64             ci/dakhlokharj/source.part7b1.b64             ci/dakhlokharj/source.part7b2.b64             ci/dakhlokharj/source.part7c.b64             > /tmp/dakhlokharj-source.b64
+          cat ci/dakhlokharj/source.part1.b64 ci/dakhlokharj/source.part2.b64 ci/dakhlokharj/source.part3.b64 ci/dakhlokharj/source.part4.b64 ci/dakhlokharj/source.part5a.b64 ci/dakhlokharj/source.part5b.b64 ci/dakhlokharj/source.part5c.b64 ci/dakhlokharj/source.part6a.b64 ci/dakhlokharj/source.part6b.b64 ci/dakhlokharj/source.part6c.b64 ci/dakhlokharj/source.part7a.b64 ci/dakhlokharj/source.part7b1.b64 ci/dakhlokharj/source.part7b2.b64 ci/dakhlokharj/source.part7c.b64 > /tmp/dakhlokharj-source.b64
+          test "$(wc -c < /tmp/dakhlokharj-source.b64)" -eq 60180
           base64 --decode /tmp/dakhlokharj-source.b64 > /tmp/dakhlokharj-source.zip
           unzip -t /tmp/dakhlokharj-source.zip
           rm -rf dakhlokharj
