@@ -124,9 +124,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          cp releases/DakhlOKharj-MVP-debug.apk /tmp/DakhlOKharj-MVP-debug.apk
+          cp releases/DakhlOKharj-MVP-debug.apk.sha256 /tmp/DakhlOKharj-MVP-debug.apk.sha256
+          git reset --hard HEAD
+          git clean -fd dakhlokharj
+          git pull --rebase origin main
+          mkdir -p releases
+          cp /tmp/DakhlOKharj-MVP-debug.apk releases/DakhlOKharj-MVP-debug.apk
+          cp /tmp/DakhlOKharj-MVP-debug.apk.sha256 releases/DakhlOKharj-MVP-debug.apk.sha256
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git pull --rebase origin main
           git add releases/DakhlOKharj-MVP-debug.apk releases/DakhlOKharj-MVP-debug.apk.sha256
           if git diff --cached --quiet; then
             echo "APK is already current."
