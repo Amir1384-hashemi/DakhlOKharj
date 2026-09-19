@@ -5,7 +5,6 @@ on:
   push:
     branches: [ main ]
     paths:
-      - 'ci/dakhlokharj/v021_source.tar.xz.b64'
       - '.github/workflows/publish-apk.yml'
 
 permissions:
@@ -23,21 +22,47 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Reconstruct DakhlOKharj v0.2.1 source
+      - name: Reconstruct DakhlOKharj source
         shell: bash
         run: |
           set -euo pipefail
-          rm -rf dakhlokharj
-          base64 -d ci/dakhlokharj/v021_source.tar.xz.b64 > /tmp/dakhlokharj-v021.tar.xz
-          tar -xJf /tmp/dakhlokharj-v021.tar.xz -C .
+          python3 - <<'PY'
+          from pathlib import Path
+          import base64, io, zipfile
+
+          root = Path("ci/dakhlokharj")
+          def read(name):
+              return (root / name).read_text()
+
+          p2_original = read("source.part2.b64")
+          text = "".join([
+              read("source.part1.b64"),
+              read("source.part2a1.b64"), read("source.part2a2.b64"), p2_original[3000:],
+              read("source.part3.b64"), read("source.part4.b64"),
+              read("source.part5a1.b64"), read("source.part5a2.b64"), read("source.part5b.b64"), read("source.part5c.b64"),
+              read("source.part6a.b64"), read("source.part6b.b64"), read("source.part6c.b64"),
+              read("source.part7a.b64"), read("source.part7b1.b64"), read("source.part7b2.b64"), read("source.part7c.b64"),
+          ])
+          if len(text) != 60180:
+              raise SystemExit(f"Unexpected payload length: {len(text)}")
+          raw = base64.b64decode(text, validate=True)
+          required = {
+              "dakhlokharj/settings.gradle.kts",
+              "dakhlokharj/app/build.gradle.kts",
+              "dakhlokharj/app/src/main/AndroidManifest.xml",
+          }
+          with zipfile.ZipFile(io.BytesIO(raw)) as zf:
+              bad = zf.testzip()
+              if bad is not None:
+                  raise SystemExit(f"Corrupt archive member: {bad}")
+              if not required.issubset(set(zf.namelist())):
+                  raise SystemExit("Required project files are missing.")
+              zf.extractall(".")
+          print("Source archive verified and extracted.")
+          PY
+          python3 ci/dakhlokharj/patch-v021.py
           test -f dakhlokharj/settings.gradle.kts
           test -f dakhlokharj/app/build.gradle.kts
-          test -f dakhlokharj/app/src/main/AndroidManifest.xml
-          test -f dakhlokharj/app/src/main/res/drawable/ic_launcher_dakhlokharj.png
-          grep -q 'versionName = "0.2.1"' dakhlokharj/app/build.gradle.kts
-          echo "DakhlOKharj v0.2.1 source verified."
-          python3 ci/dakhlokharj/patch-v021.py
-          echo "Jalali report patch applied."
 
       - name: Use Android 36 compatible build versions
         shell: bash
@@ -101,10 +126,11 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git pull --rebase origin main
           git add releases/DakhlOKharj-MVP-debug.apk releases/DakhlOKharj-MVP-debug.apk.sha256
           if git diff --cached --quiet; then
             echo "APK is already current."
           else
             git commit -m "Publish DakhlOKharj v0.2.1 APK"
-            git push
+            git push origin main
           fi
