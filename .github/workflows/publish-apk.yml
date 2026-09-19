@@ -1,44 +1,108 @@
-name: Publish APK
+name: Build and Publish DakhlOKharj APK
 
 on:
   workflow_dispatch:
   push:
     branches: [ main ]
     paths:
+      - 'ci/dakhlokharj/**'
       - '.github/workflows/publish-apk.yml'
 
 permissions:
   contents: write
 
 jobs:
-  publish:
+  build:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+    timeout-minutes: 35
 
-      - name: Download APK artifact ZIP
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Reconstruct DakhlOKharj source
         shell: bash
         run: |
           set -euo pipefail
-          curl -L --fail --retry 3 'https://sdmntprukwest.oaiusercontent.com/files/00000000-3fc0-8243-94ac-bdc9c1af8465/raw?se=2026-09-19T17%3A11%3A01Z&sp=r&sv=2026-02-06&sr=b&scid=795a0968-1a95-5cab-ae7d-5d08b1bd093f&skoid=002823aa-689d-47ca-9347-108c20f4f00d&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-19T05%3A57%3A05Z&ske=2026-09-20T05%3A57%3A05Z&sks=b&skv=2026-02-06&sig=wpVi1fsC0vxA2FzeBYooygPMulEUxzlmK%2Bs%2BM1ul96E%3D' -o /tmp/apk.zip
-          mkdir -p /tmp/apk
-          unzip -o /tmp/apk.zip -d /tmp/apk
-          APK=$(find /tmp/apk -type f -name '*.apk' | head -1)
+          cat             ci/dakhlokharj/source.part1.b64             ci/dakhlokharj/source.part2.b64             ci/dakhlokharj/source.part3.b64             ci/dakhlokharj/source.part4.b64             ci/dakhlokharj/source.part5.b64             ci/dakhlokharj/source.part6a.b64             ci/dakhlokharj/source.part6b.b64             ci/dakhlokharj/source.part6c.b64             ci/dakhlokharj/source.part7a.b64             ci/dakhlokharj/source.part7b1.b64             ci/dakhlokharj/source.part7b2.b64             ci/dakhlokharj/source.part7c.b64             > /tmp/dakhlokharj-source.b64
+          base64 --decode /tmp/dakhlokharj-source.b64 > /tmp/dakhlokharj-source.zip
+          unzip -t /tmp/dakhlokharj-source.zip
+          rm -rf dakhlokharj
+          unzip -q /tmp/dakhlokharj-source.zip -d .
+          test -f dakhlokharj/settings.gradle.kts
+          test -f dakhlokharj/app/build.gradle.kts
+          test -f dakhlokharj/app/src/main/res/drawable/ic_launcher_dakhlokharj.webp
+
+      - name: Use Android 36 compatible build versions
+        shell: bash
+        run: |
+          set -euo pipefail
+          sed -i 's/compileSdk = 37/compileSdk = 36/' dakhlokharj/app/build.gradle.kts
+          sed -i 's/version "9.4.0"/version "9.2.0"/' dakhlokharj/build.gradle.kts
+          sed -i 's/compose-bom:2026.09.00/compose-bom:2025.12.00/' dakhlokharj/app/build.gradle.kts
+          sed -i 's/activity-compose:1.13.0/activity-compose:1.12.2/' dakhlokharj/app/build.gradle.kts
+          sed -i 's/lifecycle-runtime-ktx:2.11.0/lifecycle-runtime-ktx:2.10.0/' dakhlokharj/app/build.gradle.kts
+          sed -i 's/lifecycle-viewmodel-compose:2.11.0/lifecycle-viewmodel-compose:2.10.0/' dakhlokharj/app/build.gradle.kts
+          sed -i 's/navigation-compose:2.10.0/navigation-compose:2.9.6/' dakhlokharj/app/build.gradle.kts
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install Android SDK packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" 'platform-tools' 'platforms;android-36' 'build-tools;36.0.0'
+
+      - name: Setup Gradle 9.4.1
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.4.1'
+
+      - name: Build debug APK
+        working-directory: dakhlokharj
+        run: gradle --no-daemon assembleDebug --stacktrace
+
+      - name: Verify APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=$(find dakhlokharj/app/build/outputs/apk/debug -type f -name '*.apk' | head -1)
           test -n "$APK"
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs "$APK"
           mkdir -p releases
           cp "$APK" releases/DakhlOKharj-MVP-debug.apk
           sha256sum releases/DakhlOKharj-MVP-debug.apk > releases/DakhlOKharj-MVP-debug.apk.sha256
 
-      - name: Commit public APK
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: DakhlOKharj-v0.2.1-debug
+          path: |
+            releases/DakhlOKharj-MVP-debug.apk
+            releases/DakhlOKharj-MVP-debug.apk.sha256
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish APK to repository
         shell: bash
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add releases/
+          git add releases/DakhlOKharj-MVP-debug.apk releases/DakhlOKharj-MVP-debug.apk.sha256
           if git diff --cached --quiet; then
-            echo "APK already up to date"
+            echo "APK is already current."
           else
-            git commit -m "Publish DakhlOKharj APK"
+            git commit -m "Publish DakhlOKharj v0.2.1 APK"
             git push
           fi
