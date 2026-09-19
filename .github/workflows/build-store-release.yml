@@ -1,4 +1,5 @@
 name: Build Store Release
+# rerun after keystore password refresh
 
 on:
   workflow_dispatch:
