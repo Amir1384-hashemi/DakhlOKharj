@@ -5,7 +5,7 @@ on:
   push:
     branches: [ main ]
     paths:
-      - 'ci/dakhlokharj/**'
+      - 'ci/dakhlokharj/v021_source.tar.xz.b64'
       - '.github/workflows/publish-apk.yml'
 
 permissions:
@@ -23,48 +23,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Reconstruct DakhlOKharj source
+      - name: Reconstruct DakhlOKharj v0.2.1 source
         shell: bash
         run: |
           set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-          import base64, io, zipfile
-
-          root = Path("ci/dakhlokharj")
-          def read(name):
-              return (root / name).read_text()
-
-          p2_original = read("source.part2.b64")
-          text = "".join([
-              read("source.part1.b64"),
-              read("source.part2a1.b64"), read("source.part2a2.b64"), p2_original[3000:],
-              read("source.part3.b64"), read("source.part4.b64"),
-              read("source.part5a1.b64"), read("source.part5a2.b64"), read("source.part5b.b64"), read("source.part5c.b64"),
-              read("source.part6a.b64"), read("source.part6b.b64"), read("source.part6c.b64"),
-              read("source.part7a.b64"), read("source.part7b1.b64"), read("source.part7b2.b64"), read("source.part7c.b64"),
-          ])
-          if len(text) != 60180:
-              raise SystemExit(f"Unexpected payload length: {len(text)}")
-          raw = base64.b64decode(text, validate=True)
-          required = {
-              "dakhlokharj/settings.gradle.kts",
-              "dakhlokharj/app/build.gradle.kts",
-              "dakhlokharj/app/src/main/AndroidManifest.xml",
-              "dakhlokharj/app/src/main/res/drawable/ic_launcher_dakhlokharj.webp",
-          }
-          with zipfile.ZipFile(io.BytesIO(raw)) as zf:
-              bad = zf.testzip()
-              if bad is not None:
-                  raise SystemExit(f"Corrupt archive member: {bad}")
-              if not required.issubset(set(zf.namelist())):
-                  raise SystemExit("Required project files are missing from source archive.")
-              zf.extractall(".")
-          print("Source archive verified and extracted.")
-          PY
+          rm -rf dakhlokharj
+          base64 -d ci/dakhlokharj/v021_source.tar.xz.b64 > /tmp/dakhlokharj-v021.tar.xz
+          tar -xJf /tmp/dakhlokharj-v021.tar.xz -C .
           test -f dakhlokharj/settings.gradle.kts
           test -f dakhlokharj/app/build.gradle.kts
-          test -f dakhlokharj/app/src/main/res/drawable/ic_launcher_dakhlokharj.webp
+          test -f dakhlokharj/app/src/main/AndroidManifest.xml
+          test -f dakhlokharj/app/src/main/res/drawable/ic_launcher_dakhlokharj.png
+          grep -q 'versionName = "0.2.1"' dakhlokharj/app/build.gradle.kts
+          echo "DakhlOKharj v0.2.1 source verified."
 
       - name: Use Android 36 compatible build versions
         shell: bash
