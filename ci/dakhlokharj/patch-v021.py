@@ -195,3 +195,22 @@ gtext = gradle.read_text()
 gtext = gtext.replace("versionCode = 3", "versionCode = 4")
 gtext = gtext.replace('versionName = "0.2.1"', 'versionName = "0.2.2"')
 gradle.write_text(gtext)
+
+
+# v0.2.3: store-release privacy hardening
+app_text = app.read_text()
+app_text = app_text.replace('item { Text("نسخه ۰.۲.۲") }', 'item { Text("نسخه ۰.۲.۳") }')
+app.write_text(app_text)
+
+manifest = Path("dakhlokharj/app/src/main/AndroidManifest.xml")
+mtext = manifest.read_text()
+mtext = mtext.replace('android:allowBackup="true"', 'android:allowBackup="false"')
+if 'android:usesCleartextTraffic=' not in mtext:
+    mtext = mtext.replace('android:allowBackup="false"\n        android:icon=', 'android:allowBackup="false"\n        android:usesCleartextTraffic="false"\n        android:icon=')
+manifest.write_text(mtext)
+
+gradle = Path("dakhlokharj/app/build.gradle.kts")
+gtext = gradle.read_text()
+gtext = gtext.replace("versionCode = 4", "versionCode = 5")
+gtext = gtext.replace('versionName = "0.2.2"', 'versionName = "0.2.3"')
+gradle.write_text(gtext)
