@@ -102,3 +102,39 @@ db_text = db_text.replace(
 if "version = 2" not in db_text or "MIGRATION_1_2" not in db_text:
     raise SystemExit("Database migration patch failed")
 db_file.write_text(db_text, encoding="utf-8")
+
+test = Path("dakhlokharj/app/src/test/java/ir/dakhlokharj/app/sms/BankSmsParserTest.kt")
+ttext = test.read_text(encoding="utf-8")
+ttext = ttext.replace("assertEquals(125_000L, parsed.amountToman)", "assertEquals(1_250_000L, parsed.amountToman)")
+ttext = ttext.replace("assertEquals(250_000L, parsed.amountToman)", "assertEquals(2_500_000L, parsed.amountToman)")
+ttext = ttext.replace("assertEquals(400_000L, parsed.amountToman)", "assertEquals(4_000_000L, parsed.amountToman)")
+ttext = ttext.replace("assertEquals(300_000L, parsed.amountToman)", "assertEquals(3_000_000L, parsed.amountToman)")
+rial_test = r"""
+    @Test
+    fun keepsRialAmountAndConvertsTomanToRial() {
+        val rial = BankSmsParser.parse(
+            "BankMellat",
+            "خرید مبلغ 1,250,007 ریال",
+            15L
+        )
+        assertNotNull(rial)
+        assertEquals(1_250_007L, rial!!.amountToman)
+
+        val toman = BankSmsParser.parse(
+            "BankMellat",
+            "خرید مبلغ 125,000 تومان",
+            16L
+        )
+        assertNotNull(toman)
+        assertEquals(1_250_000L, toman!!.amountToman)
+    }
+"""
+if "keepsRialAmountAndConvertsTomanToRial" not in ttext:
+    ttext = ttext.replace("\n}\n", rial_test + "\n}\n")
+test.write_text(ttext, encoding="utf-8")
+
+gradle = Path("dakhlokharj/app/build.gradle.kts")
+gtext = gradle.read_text(encoding="utf-8")
+gtext = gtext.replace("versionCode = 9", "versionCode = 10")
+gtext = gtext.replace('versionName = "0.2.7"', 'versionName = "0.2.8"')
+gradle.write_text(gtext, encoding="utf-8")
