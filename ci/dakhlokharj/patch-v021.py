@@ -966,3 +966,367 @@ extra = r'''
 if "recognizesBillPaymentAndFeeAsExpense" not in ttext:
     ttext = ttext.replace("\n}\n", extra + "\n}\n")
     test.write_text(ttext, encoding="utf-8")
+
+
+# v0.2.7: transaction edit/delete, centered FAB, expanded SMS tutorial
+# Also fixes v0.2.6 fee parsing: "کارمزد" must not be mistaken for a generic "رمز" security SMS.
+parser = Path("dakhlokharj/app/src/main/java/ir/dakhlokharj/app/sms/BankSmsParser.kt")
+ptext = parser.read_text(encoding="utf-8")
+ptext = ptext.replace(
+'''        "رمز", "رمز پویا", "رمز دوم", "یکبار مصرف", "یک بار مصرف",''',
+'''        "رمز پویا", "رمزپویا", "رمز دوم", "یکبار مصرف", "یک بار مصرف",'''
+)
+ptext = ptext.replace(
+'''    private fun isSecurityMessage(text: String): Boolean =
+        securityWords.any { text.contains(it, ignoreCase = true) }''',
+'''    private fun isSecurityMessage(text: String): Boolean =
+        securityWords.any { text.contains(it, ignoreCase = true) } ||
+            Regex("(^|[^\\\\p{L}\\\\p{N}])رمز([^\\\\p{L}\\\\p{N}]|$)")
+                .containsMatchIn(text)'''
+)
+parser.write_text(ptext, encoding="utf-8")
+
+# DAO: update and delete transactions without changing the Room schema.
+daos = Path("dakhlokharj/app/src/main/java/ir/dakhlokharj/app/data/Daos.kt")
+dtext = daos.read_text(encoding="utf-8")
+dao_anchor = '''    @Insert
+    suspend fun insert(transaction: TransactionEntity): Long
+
+    @Query("UPDATE transactions SET categoryId = :categoryId, status = 'CONFIRMED' WHERE id = :transactionId")
+    suspend fun categorize(transactionId: Long, categoryId: Long)
+'''
+dao_new = '''    @Insert
+    suspend fun insert(transaction: TransactionEntity): Long
+
+    @Update
+    suspend fun update(transaction: TransactionEntity)
+
+    @Query("DELETE FROM transactions WHERE id = :id")
+    suspend fun deleteById(id: Long)
+
+    @Query("UPDATE transactions SET categoryId = :categoryId, status = 'CONFIRMED' WHERE id = :transactionId")
+    suspend fun categorize(transactionId: Long, categoryId: Long)
+'''
+if dao_anchor not in dtext:
+    raise SystemExit("TransactionDao anchor not found for v0.2.7")
+daos.write_text(dtext.replace(dao_anchor, dao_new), encoding="utf-8")
+
+repo_file = Path("dakhlokharj/app/src/main/java/ir/dakhlokharj/app/data/AppRepository.kt")
+rtext = repo_file.read_text(encoding="utf-8")
+repo_anchor = '''    suspend fun categorize(transactionId: Long, categoryId: Long) = transactions.categorize(transactionId, categoryId)
+    suspend fun getTransaction(id: Long): TransactionEntity? = transactions.getById(id)
+'''
+repo_new = '''    suspend fun categorize(transactionId: Long, categoryId: Long) = transactions.categorize(transactionId, categoryId)
+    suspend fun updateTransaction(transaction: TransactionEntity) = transactions.update(transaction)
+    suspend fun deleteTransaction(id: Long) = transactions.deleteById(id)
+    suspend fun getTransaction(id: Long): TransactionEntity? = transactions.getById(id)
+'''
+if repo_anchor not in rtext:
+    raise SystemExit("Repository anchor not found for v0.2.7")
+repo_file.write_text(rtext.replace(repo_anchor, repo_new), encoding="utf-8")
+
+vm = Path("dakhlokharj/app/src/main/java/ir/dakhlokharj/app/ui/MainViewModel.kt")
+vtext = vm.read_text(encoding="utf-8")
+vm_anchor = '''    fun categorize(transactionId: Long, categoryId: Long) {
+        viewModelScope.launch { repo.categorize(transactionId, categoryId) }
+    }
+
+    suspend fun getTransaction(id: Long): TransactionEntity? = repo.getTransaction(id)
+'''
+vm_new = '''    fun categorize(transactionId: Long, categoryId: Long) {
+        viewModelScope.launch { repo.categorize(transactionId, categoryId) }
+    }
+
+    fun updateTransaction(transaction: TransactionEntity) {
+        viewModelScope.launch { repo.updateTransaction(transaction) }
+    }
+
+    fun deleteTransaction(id: Long) {
+        viewModelScope.launch { repo.deleteTransaction(id) }
+    }
+
+    suspend fun getTransaction(id: Long): TransactionEntity? = repo.getTransaction(id)
+'''
+if vm_anchor not in vtext:
+    raise SystemExit("ViewModel anchor not found for v0.2.7")
+vm.write_text(vtext.replace(vm_anchor, vm_new), encoding="utf-8")
+
+app_text = app.read_text(encoding="utf-8")
+
+# Center the main + button above the bottom navigation.
+app_text = app_text.replace(
+'''            floatingActionButton = {
+                if (showBottom) FloatingActionButton(onClick = { navController.navigate("add") }) { Text("+") }
+            }
+''',
+'''            floatingActionButton = {
+                if (showBottom) FloatingActionButton(onClick = { navController.navigate("add") }) { Text("+") }
+            },
+            floatingActionButtonPosition = androidx.compose.material3.FabPosition.Center
+'''
+)
+
+# Back button and navigation route for transaction editing.
+app_text = app_text.replace(
+'''                        if (route.startsWith("categorize/") || route == "add") {''',
+'''                        if (route.startsWith("categorize/") || route.startsWith("edit/") || route == "add") {'''
+)
+
+app_text = app_text.replace(
+'''                composable("add") { AddTransactionScreen(viewModel) { navController.popBackStack() } }
+                composable("categorize/{id}") { entry ->''',
+'''                composable("add") { AddTransactionScreen(viewModel) { navController.popBackStack() } }
+                composable("edit/{id}") { entry ->
+                    val id = entry.arguments?.getString("id")?.toLongOrNull() ?: -1L
+                    EditTransactionScreen(viewModel, id) { navController.popBackStack() }
+                }
+                composable("categorize/{id}") { entry ->'''
+)
+
+app_text = app_text.replace(
+'''    route == "add" -> "ثبت دستی"
+    route.startsWith("categorize/") -> "دسته‌بندی تراکنش"''',
+'''    route == "add" -> "ثبت دستی"
+    route.startsWith("edit/") -> "ویرایش تراکنش"
+    route.startsWith("categorize/") -> "دسته‌بندی تراکنش"'''
+)
+
+# Recent transactions: confirmed items open edit; unclassified items keep the fast categorize flow.
+app_text = app_text.replace(
+'''            TransactionRow(transaction) {
+                if (transaction.status == TransactionStatus.UNCLASSIFIED) navController.navigate("categorize/${transaction.id}")
+            }''',
+'''            TransactionRow(transaction) {
+                if (transaction.status == TransactionStatus.UNCLASSIFIED) {
+                    navController.navigate("categorize/${transaction.id}")
+                } else {
+                    navController.navigate("edit/${transaction.id}")
+                }
+            }'''
+)
+
+# Transactions list: tapping any row opens the edit/delete screen.
+app_text = app_text.replace(
+'''            TransactionRow(item) {
+                if (item.status == TransactionStatus.UNCLASSIFIED) navController.navigate("categorize/${item.id}")
+            }''',
+'''            TransactionRow(item) {
+                navController.navigate("edit/${item.id}")
+            }'''
+)
+
+edit_screen = r'''
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
+@Composable
+private fun EditTransactionScreen(viewModel: MainViewModel, transactionId: Long, onDone: () -> Unit) {
+    var transaction by remember(transactionId) { mutableStateOf<TransactionEntity?>(null) }
+    var type by remember(transactionId) { mutableStateOf(TransactionType.EXPENSE) }
+    var amount by remember(transactionId) { mutableStateOf("") }
+    var description by remember(transactionId) { mutableStateOf("") }
+    var selectedCategory by remember(transactionId) { mutableStateOf<Long?>(null) }
+    var selectedDateMs by remember(transactionId) { mutableStateOf(System.currentTimeMillis()) }
+    var showDatePicker by remember { mutableStateOf(false) }
+    var confirmDelete by remember { mutableStateOf(false) }
+
+    val expenses by viewModel.expenseCategories.collectAsState()
+    val incomes by viewModel.incomeCategories.collectAsState()
+    val categories = if (type == TransactionType.EXPENSE) expenses else incomes
+
+    LaunchedEffect(transactionId) {
+        val loaded = viewModel.getTransaction(transactionId)
+        transaction = loaded
+        if (loaded != null) {
+            type = loaded.type
+            amount = loaded.amountToman.toString()
+            description = loaded.description.orEmpty()
+            selectedCategory = loaded.categoryId
+            selectedDateMs = loaded.dateTimeEpochMs
+        }
+    }
+
+    val current = transaction ?: run {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("در حال بارگذاری…") }
+        return
+    }
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        item {
+            Text("مبلغ، نوع، دسته، تاریخ و توضیح را می‌توانید اصلاح کنید.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        item {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(
+                    selected = type == TransactionType.EXPENSE,
+                    onClick = { type = TransactionType.EXPENSE; selectedCategory = null },
+                    label = { Text("هزینه") }
+                )
+                FilterChip(
+                    selected = type == TransactionType.INCOME,
+                    onClick = { type = TransactionType.INCOME; selectedCategory = null },
+                    label = { Text("درآمد") }
+                )
+            }
+        }
+        item {
+            OutlinedTextField(
+                value = amount,
+                onValueChange = { amount = it.toAsciiDigits().filter(Char::isDigit) },
+                label = { Text("مبلغ (تومان)") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+        }
+        item {
+            OutlinedButton(onClick = { showDatePicker = true }, modifier = Modifier.fillMaxWidth()) {
+                Text("تاریخ وقوع تراکنش: ${formatDateJalali(selectedDateMs)}")
+            }
+        }
+        item { Text("دسته", fontWeight = FontWeight.Bold) }
+        item {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                categories.forEach { category ->
+                    FilterChip(
+                        selected = selectedCategory == category.id,
+                        onClick = { selectedCategory = category.id },
+                        label = { Text("${category.iconKey} ${category.name}") }
+                    )
+                }
+            }
+        }
+        item {
+            OutlinedTextField(
+                value = description,
+                onValueChange = { description = it },
+                label = { Text("توضیح (اختیاری)") },
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+        item {
+            Button(
+                onClick = {
+                    val parsed = amount.toLongOrNull() ?: return@Button
+                    viewModel.updateTransaction(
+                        current.copy(
+                            amountToman = parsed,
+                            type = type,
+                            dateTimeEpochMs = selectedDateMs,
+                            categoryId = selectedCategory,
+                            status = if (selectedCategory == null) TransactionStatus.UNCLASSIFIED else TransactionStatus.CONFIRMED,
+                            description = description.trim().takeIf { it.isNotEmpty() }
+                        )
+                    )
+                    onDone()
+                },
+                enabled = (amount.toLongOrNull() ?: 0L) > 0L,
+                modifier = Modifier.fillMaxWidth()
+            ) { Text("ذخیره تغییرات") }
+        }
+        item {
+            OutlinedButton(onClick = { confirmDelete = true }, modifier = Modifier.fillMaxWidth()) {
+                Text("حذف تراکنش")
+            }
+        }
+    }
+
+    if (showDatePicker) {
+        val state = rememberDatePickerState(initialSelectedDateMillis = selectedDateMs)
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    selectedDateMs = state.selectedDateMillis ?: selectedDateMs
+                    showDatePicker = false
+                }) { Text("تأیید") }
+            },
+            dismissButton = { TextButton(onClick = { showDatePicker = false }) { Text("انصراف") } }
+        ) { DatePicker(state = state) }
+    }
+
+    if (confirmDelete) {
+        AlertDialog(
+            onDismissRequest = { confirmDelete = false },
+            title = { Text("حذف تراکنش") },
+            text = { Text("این تراکنش برای همیشه از برنامه حذف شود؟") },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.deleteTransaction(current.id)
+                    confirmDelete = false
+                    onDone()
+                }) { Text("حذف") }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmDelete = false }) { Text("انصراف") }
+            }
+        )
+    }
+}
+
+'''
+
+categorize_marker = '''@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun CategorizeScreen'''
+if edit_screen.strip() not in app_text:
+    if categorize_marker not in app_text:
+        raise SystemExit("CategorizeScreen marker not found for edit screen insertion")
+    app_text = app_text.replace(categorize_marker, edit_screen + categorize_marker)
+
+old_tutorial = '''@Composable
+private fun TutorialScreen() {
+    LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        item { Text("آموزش استفاده از دخل‌وخرج", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold) }
+        item { Text("۱) در تنظیمات، مجوز پیامک و اعلان را فعال کنید تا پیامک‌های بانکی جدید به‌صورت خودکار ثبت شوند.") }
+        item { Text("۲) پس از دریافت پیامک بانکی، برای شما اعلان نمایش داده می‌شود تا دسته درآمد یا هزینه را انتخاب کنید.") }
+        item { Text("۳) اگر همان لحظه فرصت نداشتید، تراکنش با وضعیت «بدون دسته» ذخیره می‌شود و بعداً می‌توانید آن را تکمیل کنید.") }
+        item { Text("۴) برای ثبت هزینه یا درآمدی که پیامک ندارد، از دکمه + استفاده کنید و مبلغ، دسته، تاریخ وقوع و توضیح را وارد نمایید.") }
+        item { Text("۵) از بخش دسته‌ها می‌توانید دسته‌های دلخواه درآمد و هزینه را اضافه یا غیرفعال کنید.") }
+        item { Text("۶) در گزارش‌ها، بازه‌های امروز، این هفته، این ماه و امسال بر اساس تاریخ شمسی نمایش داده می‌شوند.") }
+        item { Text("نکته: بازیابی پیامک‌های قدیمی، قفل ایمنی و پشتیبان‌گیری هنوز فعال نیست و در نسخه‌های بعدی اضافه می‌شود.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+    }
+}
+'''
+new_tutorial = '''@Composable
+private fun TutorialScreen() {
+    LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        item { Text("آموزش استفاده از دخل‌وخرج", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold) }
+
+        item { Text("فعال‌سازی پیامک بانکی", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) }
+        item { Text("۱) داخل برنامه به «تنظیمات» بروید و در بخش «پیامک و اطلاع‌رسانی» روی «فعال‌سازی مجوزها» بزنید. مجوز SMS را روی Allow / اجازه دادن قرار دهید.") }
+        item { Text("۲) اگر مجوز از داخل برنامه فعال نشد یا قبلاً رد شده بود، در گوشی‌های سامسونگ و بیشتر گوشی‌های اندرویدی این مسیر را باز کنید: Settings → Apps → دخل‌وخرج → Permissions → SMS → Allow.") }
+        item { Text("۳) برای اعلان دسته‌بندی نیز در Android 13 و بالاتر این مسیر را بررسی کنید: Settings → Apps → دخل‌وخرج → Notifications → Allow notifications.") }
+        item { Text("۴) بعد از فعال‌سازی مجوز، برنامه فقط پیامک‌های بانکی جدید را دریافت می‌کند. پیامک‌هایی که قبل از فعال‌سازی در گوشی بوده‌اند وارد برنامه نمی‌شوند.") }
+        item { Text("۵) برای آزمایش، پس از فعال شدن مجوز یک تراکنش واقعی انجام دهید یا یک پیامک بانکی جدید دریافت کنید. نتیجه باید در «تراکنش‌ها» نمایش داده شود.") }
+        item { Text("۶) اگر پیامک جدید در برنامه دیده نشد، دوباره Settings → Apps → دخل‌وخرج → Permissions را باز کنید و مطمئن شوید SMS روی Allow است؛ سپس برنامه را یک‌بار ببندید و دوباره باز کنید.") }
+
+        item { Text("کار با تراکنش‌ها", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) }
+        item { Text("۷) پیامک بانکی شناسایی‌شده به‌صورت تراکنش ذخیره می‌شود. اگر دسته انتخاب نشده باشد، وضعیت «بدون دسته» دارد و می‌توانید بعداً دسته را تعیین کنید.") }
+        item { Text("۸) برای ثبت دستی هزینه یا درآمد، دکمه + که در وسط پایین صفحه قرار دارد را بزنید و مبلغ، نوع، دسته، تاریخ و توضیح را وارد کنید.") }
+        item { Text("۹) برای ویرایش یا حذف، وارد «تراکنش‌ها» شوید و روی تراکنش موردنظر بزنید. سپس اطلاعات را اصلاح و «ذخیره تغییرات» را انتخاب کنید یا از «حذف تراکنش» استفاده کنید.") }
+        item { Text("۱۰) از بخش دسته‌ها می‌توانید دسته‌های دلخواه درآمد و هزینه را اضافه یا غیرفعال کنید. گزارش‌ها نیز بازه‌های امروز، این هفته، این ماه و امسال را بر اساس تاریخ شمسی نمایش می‌دهند.") }
+
+        item { Text("نکته امنیتی: رمز پویا، کد ورود و پیامک‌های امنیتی به‌عنوان تراکنش ثبت نمی‌شوند. متن کامل پیامک هم برای گزارش‌ها ذخیره نمی‌شود.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        item { Text("نکته: بازیابی پیامک‌های قدیمی، قفل ایمنی و پشتیبان‌گیری هنوز فعال نیست و در نسخه‌های بعدی اضافه می‌شود.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+    }
+}
+'''
+if old_tutorial not in app_text:
+    raise SystemExit("Tutorial block not found for v0.2.7")
+app_text = app_text.replace(old_tutorial, new_tutorial)
+
+app_text = app_text.replace('item { Text("نسخه ۰.۲.۶") }', 'item { Text("نسخه ۰.۲.۷") }')
+app.write_text(app_text, encoding="utf-8")
+
+gradle = Path("dakhlokharj/app/build.gradle.kts")
+gtext = gradle.read_text(encoding="utf-8")
+gtext = gtext.replace("versionCode = 8", "versionCode = 9")
+gtext = gtext.replace('versionName = "0.2.6"', 'versionName = "0.2.7"')
+
+# Myket currently requires Target SDK API 34+. This project already targets API 36.
+if "targetSdk = 36" not in gtext:
+    raise SystemExit("Expected targetSdk = 36; verify Myket target SDK compliance before release")
+gradle.write_text(gtext, encoding="utf-8")
