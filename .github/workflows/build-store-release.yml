@@ -121,8 +121,8 @@ jobs:
 
           mkdir -p store-release
           ALIGNED_APK=/tmp/DakhlOKharj-aligned.apk
-          RELEASE_APK=store-release/DakhlOKharj-v0.2.6-release.apk
-          RELEASE_AAB=store-release/DakhlOKharj-v0.2.6-release.aab
+          RELEASE_APK=store-release/DakhlOKharj-v0.2.7-release.apk
+          RELEASE_AAB=store-release/DakhlOKharj-v0.2.7-release.aab
 
           "$ANDROID_HOME/build-tools/36.0.0/zipalign" -f -v 4 "$UNSIGNED_APK" "$ALIGNED_APK"
 
@@ -140,7 +140,7 @@ jobs:
       - name: Upload store release
         uses: actions/upload-artifact@v4
         with:
-          name: DakhlOKharj-v0.2.6-store-release
+          name: DakhlOKharj-v0.2.7-store-release
           path: store-release/*
           if-no-files-found: error
           retention-days: 30
