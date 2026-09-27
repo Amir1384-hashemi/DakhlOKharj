@@ -7,6 +7,7 @@ on:
     paths:
       - '.github/workflows/publish-apk.yml'
       - 'ci/dakhlokharj/patch-v021.py'
+      - 'ci/dakhlokharj/patch-v028.py'
 
 permissions:
   contents: write
@@ -62,6 +63,7 @@ jobs:
           print("Source archive verified and extracted.")
           PY
           python3 ci/dakhlokharj/patch-v021.py
+          python3 ci/dakhlokharj/patch-v028.py
           test -f dakhlokharj/settings.gradle.kts
           test -f dakhlokharj/app/build.gradle.kts
 
@@ -114,7 +116,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: DakhlOKharj-v0.2.2-debug
+          name: DakhlOKharj-v0.2.8-debug
           path: |
             releases/DakhlOKharj-MVP-debug.apk
             releases/DakhlOKharj-MVP-debug.apk.sha256
@@ -139,6 +141,6 @@ jobs:
           if git diff --cached --quiet; then
             echo "APK is already current."
           else
-            git commit -m "Publish DakhlOKharj v0.2.2 APK"
+            git commit -m "Publish DakhlOKharj v0.2.8 APK"
             git push origin main
           fi
