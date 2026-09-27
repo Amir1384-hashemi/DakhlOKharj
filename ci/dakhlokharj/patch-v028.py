@@ -84,3 +84,21 @@ app_text = app_text.replace(
 )
 app_text = app_text.replace('item { Text("نسخه ۰.۲.۷") }', 'item { Text("نسخه ۰.۲.۸") }')
 app.write_text(app_text, encoding="utf-8")
+
+db_file = Path("dakhlokharj/app/src/main/java/ir/dakhlokharj/app/data/AppDatabase.kt")
+db_text = db_file.read_text(encoding="utf-8")
+db_text = db_text.replace(
+    "import androidx.room.RoomDatabase\nimport androidx.room.TypeConverters",
+    "import androidx.room.RoomDatabase\nimport androidx.room.TypeConverters\nimport androidx.room.migration.Migration\nimport androidx.sqlite.db.SupportSQLiteDatabase"
+)
+db_text = db_text.replace(
+    "    version = 1,\n    exportSchema = false",
+    "    version = 2,\n    exportSchema = false"
+)
+db_text = db_text.replace(
+    '            ).build().also { INSTANCE = it }\n        }\n    }\n}',
+    '            ).addMigrations(MIGRATION_1_2).build().also { INSTANCE = it }\n        }\n\n        private val MIGRATION_1_2 = object : Migration(1, 2) {\n            override fun migrate(db: SupportSQLiteDatabase) {\n                db.execSQL("UPDATE transactions SET amountToman = amountToman * 10")\n            }\n        }\n    }\n}'
+)
+if "version = 2" not in db_text or "MIGRATION_1_2" not in db_text:
+    raise SystemExit("Database migration patch failed")
+db_file.write_text(db_text, encoding="utf-8")
