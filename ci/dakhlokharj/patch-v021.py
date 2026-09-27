@@ -455,3 +455,377 @@ class BankSmsParserTest {
     }
 }
 ''', encoding="utf-8")
+
+
+# v0.2.5: sender-aware bank SMS classification
+parser = Path("dakhlokharj/app/src/main/java/ir/dakhlokharj/app/sms/BankSmsParser.kt")
+parser.write_text(r'''package ir.dakhlokharj.app.sms
+
+import ir.dakhlokharj.app.domain.TransactionType
+import java.security.MessageDigest
+
+data class ParsedBankSms(
+    val amountToman: Long,
+    val type: TransactionType,
+    val bankName: String?,
+    val accountLast4: String?,
+    val fingerprint: String
+)
+
+object BankSmsParser {
+    private val incomeWords = listOf(
+        "واریز", "واریزی", "بستانکار", "افزایش موجودی", "دریافت وجه", "انتقال ورودی",
+        "به حساب شما", "به کارت شما", "به سپرده شما"
+    )
+
+    private val expenseWords = listOf(
+        "برداشت", "خرید", "پرداخت", "کسر", "بدهکار", "کسر از", "برداشت از",
+        "از حساب شما", "از کارت شما", "از سپرده شما"
+    )
+
+    private val genericExpenseWords = listOf(
+        "کارت به کارت", "انتقال وجه", "انتقال", "حواله", "پایا", "ساتنا"
+    )
+
+    private val securityWords = listOf(
+        "رمز", "رمز پویا", "رمز دوم", "یکبار مصرف", "یک بار مصرف",
+        "کد ورود", "کد تایید", "کد تأیید", "کد امنیتی", "otp",
+        "فعال سازی", "فعالسازی"
+    )
+
+    private val bodyBankNames = linkedMapOf(
+        "ملت" to "بانک ملت",
+        "ملی" to "بانک ملی",
+        "صادرات" to "بانک صادرات",
+        "تجارت" to "بانک تجارت",
+        "سامان" to "بانک سامان",
+        "پاسارگاد" to "بانک پاسارگاد",
+        "پارسیان" to "بانک پارسیان",
+        "کشاورزی" to "بانک کشاورزی",
+        "مسکن" to "بانک مسکن",
+        "رفاه" to "بانک رفاه",
+        "اقتصاد نوین" to "بانک اقتصاد نوین",
+        "شهر" to "بانک شهر",
+        "آینده" to "بانک آینده",
+        "بلو" to "بلوبانک",
+        "رسالت" to "بانک قرض الحسنه رسالت",
+        "مهر ایران" to "بانک قرض الحسنه مهر ایران",
+        "سپاه" to "بانک سپه",
+        "سپه" to "بانک سپه",
+        "سینا" to "بانک سینا",
+        "دی" to "بانک دی",
+        "کارآفرین" to "بانک کارآفرین",
+        "ایران زمین" to "بانک ایران زمین",
+        "گردشگری" to "بانک گردشگری",
+        "پست بانک" to "پست بانک ایران"
+    )
+
+    private val senderBankHints = linkedMapOf(
+        "mellat" to "بانک ملت",
+        "bankmellat" to "بانک ملت",
+        "melli" to "بانک ملی",
+        "bankmelli" to "بانک ملی",
+        "bmi" to "بانک ملی",
+        "saderat" to "بانک صادرات",
+        "bsi" to "بانک صادرات",
+        "tejarat" to "بانک تجارت",
+        "saman" to "بانک سامان",
+        "pasargad" to "بانک پاسارگاد",
+        "bpi" to "بانک پاسارگاد",
+        "parsian" to "بانک پارسیان",
+        "keshavarzi" to "بانک کشاورزی",
+        "bki" to "بانک کشاورزی",
+        "maskan" to "بانک مسکن",
+        "refah" to "بانک رفاه",
+        "enbank" to "بانک اقتصاد نوین",
+        "eghtesadnovin" to "بانک اقتصاد نوین",
+        "shahr" to "بانک شهر",
+        "citybank" to "بانک شهر",
+        "ayandeh" to "بانک آینده",
+        "blu" to "بلوبانک",
+        "resalat" to "بانک قرض الحسنه رسالت",
+        "mehriran" to "بانک قرض الحسنه مهر ایران",
+        "sepah" to "بانک سپه",
+        "sina" to "بانک سینا",
+        "daybank" to "بانک دی",
+        "karafarin" to "بانک کارآفرین",
+        "iranzamin" to "بانک ایران زمین",
+        "gardeshgari" to "بانک گردشگری",
+        "postbank" to "پست بانک ایران"
+    )
+
+    private val strongBodySignals = listOf(
+        "بانک", "کارت", "حساب", "سپرده", "مانده", "موجودی",
+        "شبا", "پایا", "ساتنا", "خودپرداز", "پایانه", "درگاه", "pos", "atm"
+    )
+
+    fun parse(sender: String?, body: String, timestampMs: Long): ParsedBankSms? {
+        val normalized = normalize(body)
+        if (normalized.isBlank() || isSecurityMessage(normalized)) return null
+
+        val type = detectType(normalized) ?: return null
+        val amount = extractAmountToman(normalized) ?: return null
+        if (amount <= 0L) return null
+
+        val bankFromBody = bodyBankNames.entries
+            .firstOrNull { normalized.contains(it.key, ignoreCase = true) }?.value
+        val bankFromSender = bankNameFromSender(sender)
+
+        if (!looksLikeBankSender(sender, bankFromSender) && !hasStrongBankBody(normalized, bankFromBody)) {
+            return null
+        }
+
+        val bankName = bankFromSender ?: bankFromBody ?: sender?.takeIf { it.isNotBlank() }
+        val last4 = extractLast4(normalized)
+        val fingerprint = sha256(sender.orEmpty() + "|" + body + "|" + timestampMs)
+
+        return ParsedBankSms(amount, type, bankName, last4, fingerprint)
+    }
+
+    private fun isSecurityMessage(text: String): Boolean =
+        securityWords.any { text.contains(it, ignoreCase = true) }
+
+    private fun detectType(text: String): TransactionType? {
+        val incomeIndex = firstIndex(text, incomeWords)
+        val expenseIndex = firstIndex(text, expenseWords)
+
+        return when {
+            incomeIndex != null && expenseIndex != null ->
+                if (incomeIndex <= expenseIndex) TransactionType.INCOME else TransactionType.EXPENSE
+            incomeIndex != null -> TransactionType.INCOME
+            expenseIndex != null -> TransactionType.EXPENSE
+            Regex("(?:^|\\s)\\+\\s*[0-9]").containsMatchIn(text) -> TransactionType.INCOME
+            Regex("(?:^|\\s)-\\s*[0-9]").containsMatchIn(text) -> TransactionType.EXPENSE
+            genericExpenseWords.any { text.contains(it) } -> TransactionType.EXPENSE
+            else -> null
+        }
+    }
+
+    private fun firstIndex(text: String, words: List<String>): Int? =
+        words.asSequence().map { text.indexOf(it) }.filter { it >= 0 }.minOrNull()
+
+    private fun extractAmountToman(text: String): Long? {
+        val currencyPattern = Regex("([0-9][0-9,٬.]*)\\s*(ریال|تومان)")
+        for (match in currencyPattern.findAll(text)) {
+            val start = (match.range.first - 32).coerceAtLeast(0)
+            val context = text.substring(start, match.range.first)
+            if (isBalanceContext(context)) continue
+            parseAmount(match.groupValues[1], match.groupValues[2])?.let { return it }
+        }
+
+        val labeledPatterns = listOf(
+            Regex("(?:مبلغ(?:\\s+(?:تراکنش|خرید|برداشت|واریز|انتقال))?)\\s*[:：=-]?\\s*([0-9][0-9,٬.]*)\\s*(ریال|تومان)?"),
+            Regex("(?:برداشت|واریز|خرید|پرداخت|انتقال(?: وجه)?|کارت به کارت)\\s*[:：=-]\\s*([0-9][0-9,٬.]*)\\s*(ریال|تومان)?")
+        )
+        for (pattern in labeledPatterns) {
+            val match = pattern.find(text) ?: continue
+            parseAmount(match.groupValues[1], match.groupValues.getOrNull(2).orEmpty())?.let { return it }
+        }
+        return null
+    }
+
+    private fun isBalanceContext(context: String): Boolean {
+        val tail = context.takeLast(32)
+        return listOf("مانده", "موجودی", "قابل برداشت", "balance")
+            .any { tail.contains(it, ignoreCase = true) }
+    }
+
+    private fun parseAmount(raw: String, currency: String): Long? {
+        val value = raw.replace(",", "").replace("٬", "").replace(".", "").toLongOrNull() ?: return null
+        return when (currency) {
+            "تومان" -> value
+            "ریال" -> value / 10L
+            else -> value / 10L
+        }
+    }
+
+    private fun bankNameFromSender(sender: String?): String? {
+        val normalizedSender = normalizeSender(sender)
+        if (normalizedSender.isBlank()) return null
+        return senderBankHints.entries
+            .firstOrNull { normalizedSender.contains(it.key) }?.value
+    }
+
+    private fun looksLikeBankSender(sender: String?, bankFromSender: String?): Boolean {
+        if (bankFromSender != null) return true
+
+        val raw = sender?.trim().orEmpty()
+        if (raw.isBlank()) return false
+
+        val digits = raw.filter { it.isDigit() }
+        val numericLike = raw.all { it.isDigit() || it == '+' || it == '-' || it == ' ' }
+
+        if (numericLike) {
+            // Iranian bank/service SMS often arrives from short numeric service senders.
+            // Full phone numbers are not trusted by sender alone.
+            return digits.length in 3..9
+        }
+
+        // Alphanumeric sender IDs are service-style rather than ordinary personal numbers.
+        return raw.length >= 3
+    }
+
+    private fun hasStrongBankBody(text: String, bankFromBody: String?): Boolean {
+        if (bankFromBody != null) return true
+
+        val hits = strongBodySignals.count { text.contains(it, ignoreCase = true) }
+        val hasAccountReference = listOf("کارت", "حساب", "سپرده", "شبا")
+            .any { text.contains(it) }
+        val hasBalanceReference = listOf("مانده", "موجودی", "قابل برداشت")
+            .any { text.contains(it) }
+
+        return hits >= 2 || (hasAccountReference && hasBalanceReference)
+    }
+
+    private fun normalizeSender(sender: String?): String =
+        sender.orEmpty().lowercase()
+            .replace(" ", "")
+            .replace("-", "")
+            .replace("_", "")
+
+    private fun extractLast4(text: String): String? {
+        val direct = Regex("(?:کارت|حساب)[^0-9]{0,22}([0-9]{4})(?![0-9])").find(text)
+        if (direct != null) return direct.groupValues[1]
+
+        return Regex("[*xX-]{2,}([0-9]{4})(?![0-9])")
+            .find(text)?.groupValues?.getOrNull(1)
+    }
+
+    internal fun normalize(input: String): String = buildString(input.length) {
+        input.forEach { ch ->
+            append(
+                when (ch) {
+                    '۰', '٠' -> '0'
+                    '۱', '١' -> '1'
+                    '۲', '٢' -> '2'
+                    '۳', '٣' -> '3'
+                    '۴', '٤' -> '4'
+                    '۵', '٥' -> '5'
+                    '۶', '٦' -> '6'
+                    '۷', '٧' -> '7'
+                    '۸', '٨' -> '8'
+                    '۹', '٩' -> '9'
+                    'ي', 'ى' -> 'ی'
+                    'ك' -> 'ک'
+                    else -> ch
+                }
+            )
+        }
+    }.replace('\u200c', ' ').replace(Regex("\\s+"), " ").trim()
+
+    private fun sha256(value: String): String = MessageDigest.getInstance("SHA-256")
+        .digest(value.toByteArray())
+        .joinToString("") { "%02x".format(it) }
+}
+''', encoding="utf-8")
+
+app_text = app.read_text(encoding="utf-8")
+app_text = app_text.replace('item { Text("نسخه ۰.۲.۴") }', 'item { Text("نسخه ۰.۲.۵") }')
+app.write_text(app_text, encoding="utf-8")
+
+gradle = Path("dakhlokharj/app/build.gradle.kts")
+gtext = gradle.read_text(encoding="utf-8")
+gtext = gtext.replace("versionCode = 6", "versionCode = 7")
+gtext = gtext.replace('versionName = "0.2.4"', 'versionName = "0.2.5"')
+gradle.write_text(gtext, encoding="utf-8")
+
+test = Path("dakhlokharj/app/src/test/java/ir/dakhlokharj/app/sms/BankSmsParserTest.kt")
+test.parent.mkdir(parents=True, exist_ok=True)
+test.write_text(r'''package ir.dakhlokharj.app.sms
+
+import ir.dakhlokharj.app.domain.TransactionType
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
+import org.junit.Test
+
+class BankSmsParserTest {
+    @Test
+    fun knownBankSenderAcceptsTersePurchase() {
+        val parsed = BankSmsParser.parse(
+            "BankMellat",
+            "خرید 1,250,000 ریال",
+            1L
+        )
+        assertNotNull(parsed)
+        assertEquals(TransactionType.EXPENSE, parsed!!.type)
+        assertEquals(125_000L, parsed.amountToman)
+        assertEquals("بانک ملت", parsed.bankName)
+    }
+
+    @Test
+    fun shortServiceSenderAcceptsBankLikeMessage() {
+        val parsed = BankSmsParser.parse(
+            "30001234",
+            "برداشت از کارت 1234 مبلغ: 1,250,000 ریال مانده: 50,000,000 ریال",
+            2L
+        )
+        assertNotNull(parsed)
+        assertEquals(TransactionType.EXPENSE, parsed!!.type)
+        assertEquals(125_000L, parsed.amountToman)
+    }
+
+    @Test
+    fun personalPhoneNeedsStrongBankBody() {
+        val weak = BankSmsParser.parse(
+            "09121234567",
+            "خرید 100,000 ریال",
+            3L
+        )
+        assertNull(weak)
+
+        val strong = BankSmsParser.parse(
+            "09121234567",
+            "برداشت از کارت 1234 مبلغ 100,000 ریال مانده 5,000,000 ریال",
+            4L
+        )
+        assertNotNull(strong)
+    }
+
+    @Test
+    fun parsesPersianDigitsIncome() {
+        val parsed = BankSmsParser.parse(
+            "Melli",
+            "واریز ۲٬۵۰۰٬۰۰۰ ریال به حساب شما موجودی ۱۰٬۰۰۰٬۰۰۰ ریال",
+            5L
+        )
+        assertNotNull(parsed)
+        assertEquals(TransactionType.INCOME, parsed!!.type)
+        assertEquals(250_000L, parsed.amountToman)
+        assertEquals("بانک ملی", parsed.bankName)
+    }
+
+    @Test
+    fun recognizesIncomingCardToCard() {
+        val parsed = BankSmsParser.parse(
+            "Saman",
+            "کارت به کارت به کارت شما مبلغ 3,000,000 ریال",
+            6L
+        )
+        assertNotNull(parsed)
+        assertEquals(TransactionType.INCOME, parsed!!.type)
+    }
+
+    @Test
+    fun recognizesOutgoingTransfer() {
+        val parsed = BankSmsParser.parse(
+            "Pasargad",
+            "انتقال وجه: 4,000,000 ریال",
+            7L
+        )
+        assertNotNull(parsed)
+        assertEquals(TransactionType.EXPENSE, parsed!!.type)
+        assertEquals(400_000L, parsed.amountToman)
+    }
+
+    @Test
+    fun ignoresOtpMessagesEvenFromBankSender() {
+        val parsed = BankSmsParser.parse(
+            "BankMellat",
+            "رمز پویا 123456 برای خرید مبلغ 1,000,000 ریال",
+            8L
+        )
+        assertNull(parsed)
+    }
+}
+''', encoding="utf-8")
