@@ -1344,3 +1344,14 @@ for _path, _terms in [
         print("DIAGTERM", _term, _i)
         if _i >= 0:
             print(_txt[max(0,_i-1200):_i+4200])
+
+
+# DIAG028_DB
+for _path in [
+    "dakhlokharj/app/src/main/java/ir/dakhlokharj/app/data/AppDatabase.kt",
+    "dakhlokharj/app/src/main/java/ir/dakhlokharj/app/MainActivity.kt",
+    "dakhlokharj/app/src/main/java/ir/dakhlokharj/app/ui/MainViewModel.kt",
+]:
+    _txt = Path(_path).read_text(encoding="utf-8")
+    print("DIAG2FILE", _path)
+    print(_txt[:9000])
