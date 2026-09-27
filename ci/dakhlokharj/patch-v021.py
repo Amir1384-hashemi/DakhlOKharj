@@ -829,3 +829,140 @@ class BankSmsParserTest {
     }
 }
 ''', encoding="utf-8")
+
+
+# v0.2.6: extend transaction vocabulary
+parser = Path("dakhlokharj/app/src/main/java/ir/dakhlokharj/app/sms/BankSmsParser.kt")
+ptext = parser.read_text(encoding="utf-8")
+
+ptext = ptext.replace(
+'''    private val incomeWords = listOf(
+        "واریز", "واریزی", "بستانکار", "افزایش موجودی", "دریافت وجه", "انتقال ورودی",
+        "به حساب شما", "به کارت شما", "به سپرده شما"
+    )''',
+'''    private val incomeWords = listOf(
+        "واریز گروهی", "واریز سود", "سود سپرده", "دریافت وجه", "دریافت",
+        "واریز", "واریزی", "بستانکار", "افزایش موجودی", "انتقال ورودی",
+        "به حساب شما", "به کارت شما", "به سپرده شما"
+    )'''
+)
+
+ptext = ptext.replace(
+'''    private val expenseWords = listOf(
+        "برداشت", "خرید", "پرداخت", "کسر", "بدهکار", "کسر از", "برداشت از",
+        "از حساب شما", "از کارت شما", "از سپرده شما"
+    )''',
+'''    private val expenseWords = listOf(
+        "پرداخت قبض", "قبض", "کارمزد", "برداشت", "خرید", "پرداخت",
+        "کسر", "بدهکار", "کسر از", "برداشت از",
+        "از حساب شما", "از کارت شما", "از سپرده شما"
+    )'''
+)
+
+ptext = ptext.replace(
+'''    private val genericExpenseWords = listOf(
+        "کارت به کارت", "انتقال وجه", "انتقال", "حواله", "پایا", "ساتنا"
+    )''',
+'''    private val genericExpenseWords = listOf(
+        "کارت به کارت", "انتقال وجه", "انتقال", "حواله", "پایا", "ساتنا"
+    )'''
+)
+
+ptext = ptext.replace(
+'''    private val strongBodySignals = listOf(
+        "بانک", "کارت", "حساب", "سپرده", "مانده", "موجودی",
+        "شبا", "پایا", "ساتنا", "خودپرداز", "پایانه", "درگاه", "pos", "atm"
+    )''',
+'''    private val strongBodySignals = listOf(
+        "بانک", "کارت", "کارت هدیه", "حساب", "سپرده", "مانده", "موجودی",
+        "شبا", "پایا", "ساتنا", "خودپرداز", "پایانه", "درگاه", "قبض",
+        "کارمزد", "سود", "pos", "atm"
+    )'''
+)
+
+ptext = ptext.replace(
+'''            Regex("(?:مبلغ(?:\\s+(?:تراکنش|خرید|برداشت|واریز|انتقال))?)\\s*[:：=-]?\\s*([0-9][0-9,٬.]*)\\s*(ریال|تومان)?"),
+            Regex("(?:برداشت|واریز|خرید|پرداخت|انتقال(?: وجه)?|کارت به کارت)\\s*[:：=-]\\s*([0-9][0-9,٬.]*)\\s*(ریال|تومان)?")''',
+'''            Regex("(?:مبلغ(?:\\s+(?:تراکنش|خرید|برداشت|واریز|انتقال|قبض|کارمزد|دریافت|سود))?)\\s*[:：=-]?\\s*([0-9][0-9,٬.]*)\\s*(ریال|تومان)?"),
+            Regex("(?:برداشت|واریز|خرید|پرداخت|انتقال(?: وجه)?|کارت به کارت|قبض|کارمزد|دریافت|سود)\\s*[:：=-]\\s*([0-9][0-9,٬.]*)\\s*(ریال|تومان)?")'''
+)
+
+parser.write_text(ptext, encoding="utf-8")
+
+app_text = app.read_text(encoding="utf-8")
+app_text = app_text.replace('item { Text("نسخه ۰.۲.۵") }', 'item { Text("نسخه ۰.۲.۶") }')
+app.write_text(app_text, encoding="utf-8")
+
+gradle = Path("dakhlokharj/app/build.gradle.kts")
+gtext = gradle.read_text(encoding="utf-8")
+gtext = gtext.replace("versionCode = 7", "versionCode = 8")
+gtext = gtext.replace('versionName = "0.2.5"', 'versionName = "0.2.6"')
+gradle.write_text(gtext, encoding="utf-8")
+
+test = Path("dakhlokharj/app/src/test/java/ir/dakhlokharj/app/sms/BankSmsParserTest.kt")
+ttext = test.read_text(encoding="utf-8")
+extra = r'''
+    @Test
+    fun recognizesBillPaymentAndFeeAsExpense() {
+        val bill = BankSmsParser.parse(
+            "BankMellat",
+            "پرداخت قبض مبلغ 850,000 ریال",
+            9L
+        )
+        assertNotNull(bill)
+        assertEquals(TransactionType.EXPENSE, bill!!.type)
+
+        val fee = BankSmsParser.parse(
+            "Melli",
+            "کارمزد 25,000 ریال از حساب شما کسر شد",
+            10L
+        )
+        assertNotNull(fee)
+        assertEquals(TransactionType.EXPENSE, fee!!.type)
+    }
+
+    @Test
+    fun recognizesProfitAndGroupDepositAsIncome() {
+        val profit = BankSmsParser.parse(
+            "Saman",
+            "واریز سود سپرده مبلغ 2,000,000 ریال",
+            11L
+        )
+        assertNotNull(profit)
+        assertEquals(TransactionType.INCOME, profit!!.type)
+
+        val groupDeposit = BankSmsParser.parse(
+            "Pasargad",
+            "واریز گروهی مبلغ 5,000,000 ریال",
+            12L
+        )
+        assertNotNull(groupDeposit)
+        assertEquals(TransactionType.INCOME, groupDeposit!!.type)
+    }
+
+    @Test
+    fun recognizesReceiveAsIncomeAndKeepsBalanceOutOfAmount() {
+        val parsed = BankSmsParser.parse(
+            "BankMellat",
+            "دریافت 3,000,000 ریال به حساب شما مانده 20,000,000 ریال",
+            13L
+        )
+        assertNotNull(parsed)
+        assertEquals(TransactionType.INCOME, parsed!!.type)
+        assertEquals(300_000L, parsed.amountToman)
+    }
+
+    @Test
+    fun giftCardAndAtmActAsBankContextSignals() {
+        val parsed = BankSmsParser.parse(
+            "30009999",
+            "برداشت از کارت هدیه در خودپرداز مبلغ 700,000 ریال مانده 1,000,000 ریال",
+            14L
+        )
+        assertNotNull(parsed)
+        assertEquals(TransactionType.EXPENSE, parsed!!.type)
+    }
+'''
+if "recognizesBillPaymentAndFeeAsExpense" not in ttext:
+    ttext = ttext.replace("\n}\n", extra + "\n}\n")
+    test.write_text(ttext, encoding="utf-8")
