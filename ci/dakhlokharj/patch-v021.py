@@ -1330,3 +1330,17 @@ gtext = gtext.replace('versionName = "0.2.6"', 'versionName = "0.2.7"')
 if "targetSdk = 36" not in gtext:
     raise SystemExit("Expected targetSdk = 36; verify Myket target SDK compliance before release")
 gradle.write_text(gtext, encoding="utf-8")
+
+
+# DIAG028
+for _path, _terms in [
+    ("dakhlokharj/app/src/main/java/ir/dakhlokharj/app/ui/AppUi.kt", ["Scaffold(", "NavigationBar", "AddTransactionScreen", "fun formatToman", "مبلغ (تومان)"]),
+    ("dakhlokharj/app/src/main/java/ir/dakhlokharj/app/ui/Formatters.kt", ["formatToman"]),
+]:
+    _txt = Path(_path).read_text(encoding="utf-8")
+    print("DIAGFILE", _path)
+    for _term in _terms:
+        _i = _txt.find(_term)
+        print("DIAGTERM", _term, _i)
+        if _i >= 0:
+            print(_txt[max(0,_i-1200):_i+4200])
