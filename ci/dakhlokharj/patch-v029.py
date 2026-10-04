@@ -90,6 +90,10 @@ parser.write_text(ptext, encoding="utf-8")
 
 test = Path("dakhlokharj/app/src/test/java/ir/dakhlokharj/app/sms/BankSmsParserTest.kt")
 ttext = test.read_text(encoding="utf-8")
+ttext = ttext.replace(
+    "        assertNull(weak)",
+    "        assertNotNull(weak)\n        assertEquals(TransactionType.EXPENSE, weak!!.type)"
+)
 extra_tests = r'''
     @Test
     fun acceptsTerseBankTransactionFromFullPhoneSender() {
