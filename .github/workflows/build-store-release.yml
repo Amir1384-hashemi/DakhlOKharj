@@ -9,6 +9,7 @@ on:
       - '.github/workflows/build-store-release.yml'
       - 'ci/dakhlokharj/patch-v021.py'
       - 'ci/dakhlokharj/patch-v028.py'
+      - 'ci/dakhlokharj/patch-v029.py'
 
 permissions:
   contents: read
@@ -72,6 +73,7 @@ jobs:
           PY
           python3 ci/dakhlokharj/patch-v021.py
           python3 ci/dakhlokharj/patch-v028.py
+          python3 ci/dakhlokharj/patch-v029.py
 
       - name: Use Android 36 compatible versions
         shell: bash
@@ -123,8 +125,8 @@ jobs:
 
           mkdir -p store-release
           ALIGNED_APK=/tmp/DakhlOKharj-aligned.apk
-          RELEASE_APK=store-release/DakhlOKharj-v0.2.8-release.apk
-          RELEASE_AAB=store-release/DakhlOKharj-v0.2.8-release.aab
+          RELEASE_APK=store-release/DakhlOKharj-v0.2.9-release.apk
+          RELEASE_AAB=store-release/DakhlOKharj-v0.2.9-release.aab
 
           "$ANDROID_HOME/build-tools/36.0.0/zipalign" -f -v 4 "$UNSIGNED_APK" "$ALIGNED_APK"
 
@@ -142,7 +144,7 @@ jobs:
       - name: Upload store release
         uses: actions/upload-artifact@v4
         with:
-          name: DakhlOKharj-v0.2.8-store-release
+          name: DakhlOKharj-v0.2.9-store-release
           path: store-release/*
           if-no-files-found: error
           retention-days: 30
