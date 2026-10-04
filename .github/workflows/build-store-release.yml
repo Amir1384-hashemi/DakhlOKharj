@@ -1,6 +1,7 @@
 name: Build Store Release
 # rerun after keystore password refresh
 # v0.2.9 rerun after test update
+# v0.2.9 rerun after regression expectation fix
 
 on:
   workflow_dispatch:
