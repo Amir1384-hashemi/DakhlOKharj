@@ -149,6 +149,16 @@ jobs:
 
           sha256sum "$RELEASE_APK" "$RELEASE_AAB" > store-release/SHA256SUMS.txt
 
+      - name: Generate Bazaar BIN
+        shell: bash
+        run: |
+          set -euo pipefail
+          java -Xmx4g -jar /tmp/bundlesigner.jar genbin -v --bundle store-release/DakhlOKharj-v0.2.9-release.aab --bin store-release --v2-signing-enabled true --v3-signing-enabled false --ks "$ANDROID_KEYSTORE_PATH" --ks-key-alias "$ANDROID_KEY_ALIAS" --ks-pass env:ANDROID_KEYSTORE_PASSWORD --key-pass env:ANDROID_KEY_PASSWORD
+          GENERATED_BIN=$(find store-release -maxdepth 1 -type f -name '*.bin' | head -1)
+          test -n "$GENERATED_BIN"
+          mv "$GENERATED_BIN" store-release/DakhlOKharj-v0.2.9-release.bin
+          sha256sum store-release/DakhlOKharj-v0.2.9-release.bin >> store-release/SHA256SUMS.txt
+
       - name: Upload store release
         uses: actions/upload-artifact@v4
         with:
