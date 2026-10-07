@@ -1,0 +1,36 @@
+name: Publish ModirYar APK
+
+on:
+  push:
+    paths:
+      - ".github/workflows/publish-modiryar-apk.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download APK
+        run: |
+          set -euo pipefail
+          mkdir -p downloads
+          curl -fL --retry 3 --max-time 180 \
+            -o downloads/ModirYar-Beta-arm64-v2.apk \
+            https://temp.sh/SsVvb/ModirYar-Beta-arm64-v2.apk
+          test -s downloads/ModirYar-Beta-arm64-v2.apk
+          file downloads/ModirYar-Beta-arm64-v2.apk
+          sha256sum downloads/ModirYar-Beta-arm64-v2.apk
+
+      - name: Commit APK
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add downloads/ModirYar-Beta-arm64-v2.apk
+          git commit -m "chore: publish ModirYar beta APK" || exit 0
+          git push
