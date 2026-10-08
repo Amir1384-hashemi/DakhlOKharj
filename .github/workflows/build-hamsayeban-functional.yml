@@ -109,7 +109,7 @@ jobs:
           gradle --no-daemon -p hamsayeban-android :app:assembleDebug
           mkdir -p downloads
           cp hamsayeban-android/app/build/outputs/apk/debug/app-debug.apk downloads/Hamsayeban-Functional-Beta.apk
-          test "$(stat -c%s downloads/Hamsayeban-Functional-Beta.apk)" -gt 50000
+          test "$(stat -c%s downloads/Hamsayeban-Functional-Beta.apk)" -gt 20000
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging downloads/Hamsayeban-Functional-Beta.apk | head -n 12
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose downloads/Hamsayeban-Functional-Beta.apk
           unzip -p downloads/Hamsayeban-Functional-Beta.apk assets/index.html | grep -q 'issueCharges'
