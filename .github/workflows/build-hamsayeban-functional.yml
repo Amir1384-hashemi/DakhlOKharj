@@ -23,12 +23,11 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.10.2'
-      - name: Use preinstalled Android SDK
+      - name: Inspect Android SDK installation
         run: |
           echo "ANDROID_HOME=$ANDROID_HOME"
-          sdkmanager --version
-      - name: Install Android 35
-        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+          ls "$ANDROID_HOME/platforms" | tail -n 10
+          ls "$ANDROID_HOME/build-tools" | tail -n 10
       - name: Prepare real Hamsayeban application assets
         shell: bash
         run: |
