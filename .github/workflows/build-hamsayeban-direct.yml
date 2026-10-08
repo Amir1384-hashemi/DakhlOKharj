@@ -127,5 +127,7 @@ jobs:
           git add downloads/Hamsayeban-Functional.apk
           if ! git diff --cached --quiet; then
             git commit -m "Release Hamsayeban functional offline app (Android SDK build)"
+            git fetch origin hamsayeban-apk-test
+            git rebase origin/hamsayeban-apk-test
             git push origin HEAD:hamsayeban-apk-test
           fi
