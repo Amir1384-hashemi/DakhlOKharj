@@ -1,0 +1,27 @@
+name: Validate Hamsayeban APK package
+on:
+  push:
+    branches: [hamsayeban-apk-test]
+    paths: [".github/workflows/validate-hamsayeban-test.yml"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check Android manifest, signature and DEX
+        shell: bash
+        run: |
+          set -euxo pipefail
+          APK="downloads/Hamsayeban-Test.apk"
+          test "$(wc -c < "$APK")" -eq 28062
+          printf '520c63094b9e543c545f5e7c216edd4c2e71d352dcc22b7a1adecf6103c014e0  %s\n' "$APK" | sha256sum --check -
+          TOOLSDIR="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)"
+          echo "Using build tools: $TOOLSDIR"
+          "$TOOLSDIR/aapt" dump badging "$APK"
+          "$TOOLSDIR/apksigner" verify --verbose --print-certs "$APK"
+          unzip -p "$APK" classes.dex >/tmp/hamsayeban-classes.dex
+          "$TOOLSDIR/dexdump" -f /tmp/hamsayeban-classes.dex >/tmp/dexdump.log
+          echo "APK package checks passed"
