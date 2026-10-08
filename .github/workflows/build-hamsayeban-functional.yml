@@ -84,7 +84,7 @@ jobs:
           const fs=require('fs'),vm=require('vm'),assert=require('assert');
           const sandbox={window:{}};
           vm.runInNewContext(fs.readFileSync('/tmp/hamsayeban-test-0.js','utf8'),sandbox);
-          const F=sandbox.window.Finance;
+          const F=sandbox.Finance;
           const units=[{id:'u1',persons:3,area:100},{id:'u2',persons:1,area:50},{id:'u3',persons:0,area:60}];
           assert.deepStrictEqual(Array.from(F.shareExpense(1200000,units,'persons'),x=>x.amount),[900000,300000,0]);
           assert.equal(F.shareExpense(100,units,'equal').reduce((s,x)=>s+x.amount,0),100);
