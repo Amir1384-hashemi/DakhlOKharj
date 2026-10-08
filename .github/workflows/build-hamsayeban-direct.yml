@@ -1,0 +1,131 @@
+name: Build Hamsayeban APK with Android SDK
+on:
+  push:
+    branches: [hamsayeban-apk-test]
+    paths: [".github/workflows/build-hamsayeban-direct.yml"]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Prepare real Hamsayeban application assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib, pathlib, zipfile, re
+          src=pathlib.Path('downloads/Hamsayeban-Test.apk')
+          raw=src.read_bytes()
+          assert hashlib.sha256(raw).hexdigest()=='520c63094b9e543c545f5e7c216edd4c2e71d352dcc22b7a1adecf6103c014e0', 'Unexpected APK source'
+          with zipfile.ZipFile(src) as z:
+              content=z.read('assets/offline.html').decode('utf-8')
+          assert 'function shareExpense' in content and 'function issueCharges' in content
+          assert 'function receivePayment' in content and 'function addExpense' in content
+          assert 'function download(content,filename,mime=' in content
+          content=content.replace("defaultCharge:1000000}});state.activeBuildingId", "defaultCharge:0}});state.activeBuildingId")
+          marker="function download(content,filename,mime='text/plain;charset=utf-8'){"
+          assert content.count(marker)==1
+          content=content.replace(marker,marker+"if(window.HamsayebanBridge){window.HamsayebanBridge.saveText(filename,String(content),mime);return;}")
+          marker2="function render(){"
+          assert content.count(marker2)==1
+          recurring="""function render(){
+            // Issue current-month charges once when configured by a prior manual issue.
+            try {
+              const x=b(), p=currentMonth(), day=Math.min(28,Math.max(1,Number(x?.settings?.issueDay)||1));
+              const due=Math.min(28,Math.max(day,Number(x?.settings?.dueDay)||20));
+              const issueDate=p+'-'+String(day).padStart(2,'0');
+              const dueDate=p+'-'+String(due).padStart(2,'0');
+              const value=Number(x?.settings?.defaultCharge)||0;
+              if(value>0 && today()>=issueDate && !x.issuedPeriods[p] && !F.isLocked(x,issueDate)) {
+                issueCharges(p,value,issueDate,dueDate);save();
+              }
+            }catch(e){console.warn('Auto issue skipped: '+e.message);}
+          """
+          content=content.replace(marker2,recurring)
+          # On-screen notice: resident role here is a local preview, not secure authentication.
+          body_note='<div style="background:#fff5d7;color:#734b05;text-align:center;padding:8px 12px;font:12px Tahoma,Arial">نسخه کاری آفلاین: اطلاعات فقط در همین گوشی ذخیره می‌شوند؛ نقش ساکن و اعلان‌ها بین گوشی‌ها همگام نیستند.</div>'
+          content=content.replace('<body>', '<body>'+body_note,1)
+          target=pathlib.Path('hamsayeban-android/app/src/main/assets/index.html')
+          target.parent.mkdir(parents=True,exist_ok=True)
+          target.write_text(content,encoding='utf-8')
+          print('Prepared working HTML logic:',len(content),'chars')
+          tests=re.findall(r'<script[^>]*>(.*?)</script>',content,re.S)
+          assert len(tests)==2,len(tests)
+          for index,script in enumerate(tests):
+              p=pathlib.Path('/tmp/hamsayeban-test-%d.js'%index)
+              p.write_text(script,encoding='utf-8')
+          PY
+          node --check /tmp/hamsayeban-test-0.js
+          node --check /tmp/hamsayeban-test-1.js
+      - name: Test accounting logic
+        shell: bash
+        run: |
+          node <<'JS'
+          const fs=require('fs'),vm=require('vm'),assert=require('assert');
+          const sandbox={window:{}};
+          vm.runInNewContext(fs.readFileSync('/tmp/hamsayeban-test-0.js','utf8'),sandbox);
+          const F=sandbox.Finance;
+          const units=[{id:'u1',persons:3,area:100},{id:'u2',persons:1,area:50},{id:'u3',persons:0,area:60}];
+          assert.deepStrictEqual(Array.from(F.shareExpense(1200000,units,'persons'),x=>x.amount),[900000,300000,0]);
+          assert.equal(F.shareExpense(100,units,'equal').reduce((s,x)=>s+x.amount,0),100);
+          const ledger=[{unitId:'u1',amount:100000,date:'2026-10-01',type:'charge'},
+            {unitId:'u1',amount:30000,date:'2026-10-05',type:'payment'}];
+          assert.equal(F.account(F.balance(ledger,'u1')).debt,70000);
+          ledger.push({unitId:'u1',amount:90000,date:'2026-10-06',type:'payment'});
+          assert.equal(F.account(F.balance(ledger,'u1')).credit,20000);
+          ledger.push({unitId:'u1',amount:10000,date:'2026-10-07',type:'refund'});
+          assert.equal(F.account(F.balance(ledger,'u1')).credit,10000);
+          assert.equal(F.account(F.balance(ledger,'u1','2026-10-05')).debt,70000);
+          const b={closedMonths:['2026-08'],closedYears:[{year:'2025'}]};
+          assert.equal(F.isLocked(b,'2026-08-15'),true);
+          assert.equal(F.isLocked(b,'2025-12-01'),true);
+          assert.equal(F.isLocked(b,'2026-10-15'),false);
+          console.log('Accounting scenarios passed: partial, excess, refund, allocation, date close');
+          JS
+      - name: Compile and sign a genuine native Android APK
+        shell: bash
+        run: |
+          set -euxo pipefail
+          TOOLS="$ANDROID_HOME/build-tools/35.0.0"
+          ANDROID_JAR="$ANDROID_HOME/platforms/android-35/android.jar"
+          test -f "$ANDROID_JAR"
+          test -x "$TOOLS/aapt"
+          test -x "$TOOLS/d8"
+          test -x "$TOOLS/apksigner"
+          mkdir -p /tmp/hamsayeban/classes /tmp/hamsayeban/dex downloads
+          sed 's#<manifest xmlns:android="http://schemas.android.com/apk/res/android">#<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="ir.hamsayeban.app">#' hamsayeban-android/app/src/main/AndroidManifest.xml > /tmp/hamsayeban/AndroidManifest.xml
+          javac -encoding UTF-8 -source 8 -target 8 -cp "$ANDROID_JAR" -d /tmp/hamsayeban/classes hamsayeban-android/app/src/main/java/ir/hamsayeban/app/MainActivity.java
+          find /tmp/hamsayeban/classes -name '*.class' -print
+          mapfile -d '' CLASSES < <(find /tmp/hamsayeban/classes -name '*.class' -print0)
+          "$TOOLS/d8" --min-api 23 --lib "$ANDROID_JAR" --output /tmp/hamsayeban/dex "${CLASSES[@]}"
+          "$TOOLS/aapt" package -f -M /tmp/hamsayeban/AndroidManifest.xml -A hamsayeban-android/app/src/main/assets -I "$ANDROID_JAR" -F /tmp/hamsayeban/unsigned.apk
+          (cd /tmp/hamsayeban/dex && zip -q -j ../unsigned.apk classes.dex)
+          "$TOOLS/zipalign" -f 4 /tmp/hamsayeban/unsigned.apk /tmp/hamsayeban/aligned.apk
+          keytool -genkeypair -noprompt -keystore /tmp/hamsayeban/test-keystore.jks -storepass android -keypass android -alias hamsayeban -keyalg RSA -keysize 2048 -validity 3650 -dname "CN=Hamsayeban Test, OU=Android, O=Independent, C=IR"
+          "$TOOLS/apksigner" sign --ks /tmp/hamsayeban/test-keystore.jks --ks-pass pass:android --key-pass pass:android --ks-key-alias hamsayeban --out downloads/Hamsayeban-Functional.apk /tmp/hamsayeban/aligned.apk
+          "$TOOLS/apksigner" verify --verbose --print-certs downloads/Hamsayeban-Functional.apk
+          "$TOOLS/aapt" dump badging downloads/Hamsayeban-Functional.apk | head -n 10
+          unzip -p downloads/Hamsayeban-Functional.apk classes.dex | head -c 8 | od -An -tx1
+          unzip -p downloads/Hamsayeban-Functional.apk assets/index.html | grep -q 'function issueCharges'
+          test "$(stat -c%s downloads/Hamsayeban-Functional.apk)" -gt 40000
+          sha256sum downloads/Hamsayeban-Functional.apk
+      - name: Publish working Hamsayeban test app
+        shell: bash
+        run: |
+          set -e
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add downloads/Hamsayeban-Functional.apk
+          if ! git diff --cached --quiet; then
+            git commit -m "Release Hamsayeban functional offline app (Android SDK build)"
+            git push origin HEAD:hamsayeban-apk-test
+          fi
