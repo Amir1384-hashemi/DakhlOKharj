@@ -1,0 +1,45 @@
+name: Publish Hamsayeban APK test
+on:
+  push:
+    branches:
+      - hamsayeban-apk-test
+    paths:
+      - "hamsayeban-transfer/**"
+      - ".github/workflows/publish-hamsayeban-test.yml"
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reconstruct and verify Hamsayeban APK
+        run: |
+          python3 - <<'PY'
+          import base64, hashlib, io, pathlib, zipfile
+          files = sorted(pathlib.Path("hamsayeban-transfer").glob("part*.txt"))
+          assert len(files) == 23, f"expected 23 parts, got {len(files)}"
+          encoded = "".join(p.read_text(encoding="ascii").strip() for p in files)
+          assert len(encoded) == 37416, len(encoded)
+          binary = base64.b64decode(encoded, validate=True)
+          sha = hashlib.sha256(binary).hexdigest()
+          assert len(binary) == 28062, len(binary)
+          assert sha == "520c63094b9e543c545f5e7c216edd4c2e71d352dcc22b7a1adecf6103c014e0", sha
+          with zipfile.ZipFile(io.BytesIO(binary)) as z:
+              assert {"AndroidManifest.xml", "classes.dex", "assets/index.html", "assets/offline.html"}.issubset(z.namelist())
+              assert z.testzip() is None
+          output = pathlib.Path("downloads/Hamsayeban-Test.apk")
+          output.parent.mkdir(parents=True, exist_ok=True)
+          output.write_bytes(binary)
+          print(f"Verified Hamsayeban APK: {len(binary)} bytes, SHA256={sha}")
+          PY
+      - name: Commit verified APK
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add downloads/Hamsayeban-Test.apk
+          if ! git diff --cached --quiet; then
+            git commit -m "Publish verified Hamsayeban Android test APK"
+            git push origin HEAD:hamsayeban-apk-test
+          fi
