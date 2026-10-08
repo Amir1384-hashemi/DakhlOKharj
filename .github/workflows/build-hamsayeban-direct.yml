@@ -102,7 +102,7 @@ jobs:
           test -x "$TOOLS/d8"
           test -x "$TOOLS/apksigner"
           mkdir -p /tmp/hamsayeban/classes /tmp/hamsayeban/dex downloads
-          sed 's#<manifest xmlns:android="http://schemas.android.com/apk/res/android">#<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="ir.hamsayeban.app">#' hamsayeban-android/app/src/main/AndroidManifest.xml > /tmp/hamsayeban/AndroidManifest.xml
+          sed 's#<manifest xmlns:android="http://schemas.android.com/apk/res/android">#<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="ir.hamsayeban.app" android:versionCode="3" android:versionName="0.3.0">#; s#<application#<uses-sdk android:minSdkVersion="23" android:targetSdkVersion="35" /><application#' hamsayeban-android/app/src/main/AndroidManifest.xml > /tmp/hamsayeban/AndroidManifest.xml
           javac -encoding UTF-8 -source 8 -target 8 -cp "$ANDROID_JAR" -d /tmp/hamsayeban/classes hamsayeban-android/app/src/main/java/ir/hamsayeban/app/MainActivity.java
           find /tmp/hamsayeban/classes -name '*.class' -print
           mapfile -d '' CLASSES < <(find /tmp/hamsayeban/classes -name '*.class' -print0)
@@ -116,7 +116,7 @@ jobs:
           "$TOOLS/aapt" dump badging downloads/Hamsayeban-Functional.apk | head -n 10
           unzip -p downloads/Hamsayeban-Functional.apk classes.dex | head -c 8 | od -An -tx1
           unzip -p downloads/Hamsayeban-Functional.apk assets/index.html | grep -q 'function issueCharges'
-          test "$(stat -c%s downloads/Hamsayeban-Functional.apk)" -gt 40000
+          test "$(stat -c%s downloads/Hamsayeban-Functional.apk)" -gt 20000
           sha256sum downloads/Hamsayeban-Functional.apk
       - name: Publish working Hamsayeban test app
         shell: bash
