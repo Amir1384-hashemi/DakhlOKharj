@@ -35,7 +35,7 @@ void main() {
     expect(find.text('پایه (a)'), findsOneWidget);
     await tester.tap(find.text('محاسبه'));
     await tester.pumpAndSettle();
-    expect(find.text('3'), findsOneWidget);
+    expect(find.byWidgetPredicate((w) => w is SelectableText && w.data == '3'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
