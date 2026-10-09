@@ -3,7 +3,8 @@
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
     <uses-permission android:name="android.permission.USE_FINGERPRINT" />
     <application
-        android:label="همسایه‌بان"
+        android:label="Hamsayeban"
+        android:icon="@drawable/hamsayeban_launcher"
         android:theme="@android:style/Theme.Material.Light.NoActionBar"
         android:supportsRtl="true"
         android:allowBackup="true"
