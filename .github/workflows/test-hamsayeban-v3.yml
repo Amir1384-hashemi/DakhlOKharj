@@ -1,0 +1,21 @@
+name: Test Hamsayeban v3 real UI operations
+on:
+  push:
+    branches: [hamsayeban-apk-test]
+    paths: ['hamsayeban-android/app/src/main/assets/**','hamsayeban-android/tests/**','.github/workflows/test-hamsayeban-v3.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install DOM simulation
+        run: npm install --no-save jsdom@26
+      - name: Run UI actions and persistence tests
+        run: node hamsayeban-android/tests/test-ui.cjs
