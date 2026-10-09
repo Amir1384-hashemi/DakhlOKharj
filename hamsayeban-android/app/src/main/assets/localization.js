@@ -33,6 +33,7 @@ function convert(text,lang){
  }
  s=s.replace(/[\u0600-\u06ff\u200c]+/gu,t=>romanize(t));
  s=s.replace(/[۰-۹٠-٩]/g,c=>String(c>='۰'&&c<='۹'?'۰۱۲۳۴۵۶۷۸۹'.indexOf(c):'٠١٢٣٤٥٦٧٨٩'.indexOf(c)));
+ s=s.replace(/[\u0600-\u06FF]/gu,'');
  s=s.replace(/~HBX(\d+)~/g,(m,i)=>found[Number(i)]??m);
  if(lang==='ar')s=s.replace(/[0-9]/g,c=>'٠١٢٣٤٥٦٧٨٩'[+c]);
  return s;
