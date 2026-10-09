@@ -46,6 +46,7 @@ jobs:
         run: |
           set -euo pipefail
           cp ci/omranyar-beta/qa_regression_test.dart "$BUILD_DIR/test/qa_regression_test.dart"
+          cp ci/omranyar-beta/qa_ui_smoke_test.dart "$BUILD_DIR/test/qa_ui_smoke_test.dart"
           python3 ci/omranyar-beta/qa_math_fixes.py
           test -s "$BUILD_DIR/test/qa_regression_test.dart"
       - name: Set up Java 17
