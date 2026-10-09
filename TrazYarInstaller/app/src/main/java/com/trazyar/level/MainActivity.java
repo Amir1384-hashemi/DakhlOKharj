@@ -9,7 +9,7 @@ import android.hardware.Sensor;
 import android.hardware.SensorManager;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
-import android.speech.tts.TextToSpeech;
+import android.media.MediaPlayer;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.graphics.*;
@@ -18,10 +18,15 @@ import android.widget.*;
 import android.graphics.drawable.GradientDrawable;
 import java.util.Locale;
 
-public class MainActivity extends Activity implements SensorEventListener, TextToSpeech.OnInitListener {
+public class MainActivity extends Activity implements SensorEventListener {
   static final int BG=0xff081A13, PANEL=0xff112A20, GREEN=0xffA8ED65, GOLD=0xffE8C87D, TEXT=0xffF1F9E9, MUTED=0xffA7BCAE;
-  SensorManager manager; Sensor sensor; TextToSpeech tts;
-  boolean ttsReady=false, speaking=false, measuring=false, resumed=false, voice=true, observed=false, lowpassInit=false;
+  SensorManager manager; Sensor sensor; MediaPlayer player;
+  boolean speaking=false, measuring=false, resumed=false, voice=true, observed=false, lowpassInit=false;
+  double previousAnnouncementDistance=Double.NaN;
+  int nearIdx=0, farIdx=0, successIdx=0;
+  final int[] nearAudio={R.raw.near_1,R.raw.near_2,R.raw.near_3,R.raw.near_4};
+  final int[] farAudio={R.raw.far_1,R.raw.far_2,R.raw.far_3,R.raw.far_4};
+  final int[] successAudio={R.raw.success_1,R.raw.success_2};
   final float[] gv=new float[3];
   double zeroX=0,zeroY=0,rawX=0,rawY=0,x=0,y=0,tolerance=.5;
   int state=-1, candidate=-1, interval=5000;
@@ -41,13 +46,12 @@ public class MainActivity extends Activity implements SensorEventListener, TextT
     manager=(SensorManager)getSystemService(Context.SENSOR_SERVICE);
     if(manager!=null){sensor=manager.getDefaultSensor(Sensor.TYPE_GRAVITY);if(sensor==null)sensor=manager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);}
     buildUI();
-    tts=new TextToSpeech(this,this);
     if(sensor==null){start.setEnabled(false);status.setText("حسگر مناسب پیدا نشد");}
     handler.post(new Runnable(){public void run() {
       long now=SystemClock.elapsedRealtime();
       if(resumed&&measuring) {
         if(observed&&now-lastReading>3000){observed=false;state=-1;status.setText("ارتباط حسگر قطع شده");stopVoice();}
-        else if(state==0&&voice&&!speaking&&now-lastVoice>=interval)announce("تراز نیست، سطح را تنظیم کنید");
+        else if(state==0&&observed&&voice&&!speaking&&now-lastVoice>=interval)announceLevel();
       }
       handler.postDelayed(this,250);
     }});
@@ -66,13 +70,13 @@ public class MainActivity extends Activity implements SensorEventListener, TextT
     start=button("▶ شروع سنجش",true);row.addView(start,new LinearLayout.LayoutParams(0,-1,1));
     calibrate=button("⊕ کالیبره",false);calibrate.setEnabled(false);row.addView(calibrate,new LinearLayout.LayoutParams(0,-1,1));
     start.setOnClickListener(v->{if(measuring)stopMeasure();else startMeasure();});
-    calibrate.setOnClickListener(v->{if(observed){zeroX=rawX;zeroY=rawY;state=-1;candidate=-1;candidateAt=0;updateLevel();Toast.makeText(this,"کالیبره شد",Toast.LENGTH_SHORT).show();}});
+    calibrate.setOnClickListener(v->{if(observed){zeroX=rawX;zeroY=rawY;state=-1;candidate=-1;candidateAt=0;previousAnnouncementDistance=Double.NaN;updateLevel();Toast.makeText(this,"کالیبره شد",Toast.LENGTH_SHORT).show();}});
     gap(root,16);
     LinearLayout opt=new LinearLayout(this);opt.setOrientation(1);opt.setPadding(px(16),px(13),px(16),px(16));opt.setBackground(background(PANEL,0xff3A6849,20));root.addView(opt);
-    TextView voiceTitle=text("اعلان صوتی فارسی",19,TEXT);opt.addView(voiceTitle);gap(opt,10);
-    Switch voiceToggle=new Switch(this);voiceToggle.setText("اعلان صوتی روشن باشد");voiceToggle.setTextSize(15);voiceToggle.setTextColor(TEXT);voiceToggle.setChecked(voice);opt.addView(voiceToggle);
+    TextView voiceTitle=text("🎙️ گویندهٔ طنز و تشویقی فارسی",19,TEXT);opt.addView(voiceTitle);gap(opt,10);
+    Switch voiceToggle=new Switch(this);voiceToggle.setText("گویندهٔ بامزه روشن باشد");voiceToggle.setTextSize(15);voiceToggle.setTextColor(TEXT);voiceToggle.setChecked(voice);opt.addView(voiceToggle);
     voiceToggle.setOnCheckedChangeListener((sw,on)->{voice=on;prefs.edit().putBoolean("voice",on).apply();if(!on)stopVoice();});
-    TextView intervalLabel=text("فاصلهٔ تکرار پیام «تراز نیست»",14,MUTED);opt.addView(intervalLabel);
+    TextView intervalLabel=text("فاصلهٔ تکرار جمله‌های طنز",14,MUTED);opt.addView(intervalLabel);
     Spinner options=new Spinner(this);
     String[] repeats={"هر ۳ ثانیه","هر ۵ ثانیه","هر ۸ ثانیه","هر ۱۲ ثانیه"};
     int[] repeatsMs={3000,5000,8000,12000};
@@ -82,7 +86,14 @@ public class MainActivity extends Activity implements SensorEventListener, TextT
       public void onItemSelected(android.widget.AdapterView<?> p,View v,int position,long id){interval=repeatsMs[position];prefs.edit().putInt("repeat",interval).apply();}
       public void onNothingSelected(android.widget.AdapterView<?> p){}
     });
-    Button test=button("🔊 آزمایش پیام صوتی",false);opt.addView(test,new LinearLayout.LayoutParams(-1,px(48)));test.setOnClickListener(v->announce("تراز است"));
+    
+    Button testFar=button("😂 آزمایش شوخی وقتی دور است",false);opt.addView(testFar,new LinearLayout.LayoutParams(-1,px(48)));
+    testFar.setOnClickListener(v->playClip(farAudio[(farIdx++)%farAudio.length],true));
+    Button testNear=button("👏 آزمایش تشویق وقتی نزدیک است",false);opt.addView(testNear,new LinearLayout.LayoutParams(-1,px(48)));
+    testNear.setOnClickListener(v->playClip(nearAudio[(nearIdx++)%nearAudio.length],true));
+    Button testOk=button("🎉 آزمایش جشن تراز شدن",false);opt.addView(testOk,new LinearLayout.LayoutParams(-1,px(48)));
+    testOk.setOnClickListener(v->playClip(successAudio[(successIdx++)%successAudio.length],true));
+    opt.addView(text("صداها از قبل داخل برنامه‌اند و بدون اینترنت یا زبان فارسی گوشی پخش می‌شوند.",12,GOLD));
     gap(root,14);
     LinearLayout settings=new LinearLayout(this);settings.setOrientation(1);settings.setPadding(px(16),px(13),px(16),px(14));settings.setBackground(background(PANEL,0xff3A6849,20));root.addView(settings);
     TextView sens=text(String.format(Locale.US,"حساسیت: ±%.1f°",tolerance),17,GREEN);settings.addView(sens);
@@ -93,11 +104,11 @@ public class MainActivity extends Activity implements SensorEventListener, TextT
       public void onStartTrackingTouch(SeekBar bar){} public void onStopTrackingTouch(SeekBar bar){}
     });
     gap(root,12);root.addView(text("برای کالیبراسیون از سطح مرجع واقعاً تراز استفاده کنید. دقت به حسگر گوشی وابسته است.",12,MUTED));
-    gap(root,12);root.addView(text("تراز یار • نسخهٔ ۱٫۳ • بدون نیاز به اینترنت",11,GOLD));
+    gap(root,12);root.addView(text("تراز یار • نسخهٔ ۱٫۴ • سخنگوی طنز آفلاین",11,GOLD));
   }
   void startMeasure() {
     if(sensor==null)return;
-    measuring=true;observed=false;lowpassInit=false;zeroX=0;zeroY=0;state=-1;candidate=-1;candidateAt=0;
+    measuring=true;observed=false;lowpassInit=false;zeroX=0;zeroY=0;state=-1;candidate=-1;candidateAt=0;previousAnnouncementDistance=Double.NaN;
     status.setText("در حال خواندن حسگر...");start.setText("■ توقف سنجش");calibrate.setEnabled(false);
     getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
     if(resumed)manager.registerListener(this,sensor,SensorManager.SENSOR_DELAY_UI);
@@ -116,12 +127,12 @@ public class MainActivity extends Activity implements SensorEventListener, TextT
     if(wanted!=candidate){candidate=wanted;candidateAt=now;}
     if(now-candidateAt>=650 && wanted!=state) {
       state=wanted;stopVoice();
-      if(voice)announce(state==1?"تراز است":"تراز نیست، سطح را تنظیم کنید");
+      if(voice)announceLevel();
     }
     status.setText(state==1?"✓  تراز است":state==0?"●  تراز نیست":"در حال تثبیت...");
     status.setTextColor(state==1?GREEN:state==0?0xffffb69f:GOLD);
     angles.setText(String.format(Locale.US,"X: %+.1f°      Y: %+.1f°",x,y));
-    directions.setText(leveled?"حباب در مرکز قرار دارد.":"حباب را با تنظیم سطح به مرکز برسانید.");
+    directions.setText(leveled?"حباب وسط رسید؛ مبارکه!":Math.max(Math.abs(x),Math.abs(y))<=Math.max(3.0,tolerance*3)?"نزدیک شدی! یک کم دیگه، آفرین!":"حباب از مرکز دور است؛ آروم تنظیمش کن.");
     drawing.setTilt(x,y,leveled);
   }
   @Override public void onSensorChanged(SensorEvent e){
@@ -133,34 +144,48 @@ public class MainActivity extends Activity implements SensorEventListener, TextT
     observed=true;lastReading=SystemClock.elapsedRealtime();calibrate.setEnabled(true);updateLevel();
   }
   @Override public void onAccuracyChanged(Sensor s,int accuracy){}
-  void announce(String message){
-    if(!resumed||!voice && !message.equals("تراز است"))return;
-    if(ttsReady&&tts!=null){
-      speaking=true;
-      String id="level-"+SystemClock.elapsedRealtime();
-      tts.speak(message,TextToSpeech.QUEUE_FLUSH,null,id);
-      lastVoice=SystemClock.elapsedRealtime();
-    } else {
-      if(!ttsReady)Toast.makeText(this,"برای صدای فارسی، موتور گفتار فارسی را در تنظیمات گوشی فعال کنید.",Toast.LENGTH_LONG).show();
-      lastVoice=SystemClock.elapsedRealtime();
+  // Select the joke by calibrated two-axis error and movement trend.
+  // The announcement interval prevents rapid chatter; success is immediate after stability.
+  void announceLevel(){
+    if(!voice || !resumed || !observed)return;
+    if(state==1){
+      previousAnnouncementDistance=0;
+      playClip(successAudio[(successIdx++)%successAudio.length],false);
+      return;
     }
+    if(state!=0)return;
+    double distance=Math.max(Math.abs(x),Math.abs(y));
+    double nearLimit=Math.max(3.0,tolerance*3.0);
+    boolean movingCloser=Double.isFinite(previousAnnouncementDistance) && distance<previousAnnouncementDistance-1.0;
+    boolean movingFarther=Double.isFinite(previousAnnouncementDistance) && distance>previousAnnouncementDistance+1.0;
+    int id;
+    if(movingFarther || (!movingCloser && distance>nearLimit)){
+      id=farAudio[(farIdx++)%farAudio.length];
+    }else{
+      id=nearAudio[(nearIdx++)%nearAudio.length];
+    }
+    previousAnnouncementDistance=distance;
+    playClip(id,false);
   }
-  void stopVoice(){speaking=false;if(tts!=null)tts.stop();}
-  @Override public void onInit(int result){
-    if(result==TextToSpeech.SUCCESS&&tts!=null){
-      int code=tts.setLanguage(new Locale("fa","IR"));
-      ttsReady=code!=TextToSpeech.LANG_MISSING_DATA&&code!=TextToSpeech.LANG_NOT_SUPPORTED;
-      tts.setSpeechRate(.92f);
-      tts.setOnUtteranceProgressListener(new android.speech.tts.UtteranceProgressListener(){
-        @Override public void onStart(String s){speaking=true;}
-        @Override public void onDone(String s){speaking=false;}
-        @Override public void onError(String s){speaking=false;}
-      });
-    }
+  void playClip(int resource,boolean preview){
+    if(!resumed || (!voice && !preview))return;
+    stopVoice();
+    try{
+      final MediaPlayer next=MediaPlayer.create(this,resource);
+      if(next==null){Toast.makeText(this,"بارگذاری صدای طنز ممکن نشد",Toast.LENGTH_SHORT).show();return;}
+      player=next;speaking=true;lastVoice=SystemClock.elapsedRealtime();
+      next.setOnCompletionListener(mp->{if(player==mp){player=null;speaking=false;}mp.release();});
+      next.setOnErrorListener((mp,what,extra)->{if(player==mp){player=null;speaking=false;}mp.release();return true;});
+      next.start();
+    }catch(Exception e){speaking=false;player=null;Toast.makeText(this,"پخش صدای طنز ممکن نشد",Toast.LENGTH_SHORT).show();}
+  }
+  void stopVoice(){
+    speaking=false;MediaPlayer old=player;player=null;
+    if(old!=null){try{old.stop();}catch(Exception ignored){}try{old.release();}catch(Exception ignored){}}
   }
   @Override protected void onResume(){super.onResume();resumed=true;if(measuring&&sensor!=null)manager.registerListener(this,sensor,SensorManager.SENSOR_DELAY_UI);}
   @Override protected void onPause(){resumed=false;if(manager!=null)manager.unregisterListener(this);stopVoice();super.onPause();}
-  @Override protected void onDestroy(){handler.removeCallbacksAndMessages(null);stopVoice();if(tts!=null)tts.shutdown();super.onDestroy();}
+  @Override protected void onDestroy(){handler.removeCallbacksAndMessages(null);stopVoice();super.onDestroy();}
 
   static class LevelDrawing extends View {
     final Paint p=new Paint(3);double dx=0,dy=0;boolean centered=false,valid=false;
