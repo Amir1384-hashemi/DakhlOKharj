@@ -2,6 +2,11 @@ package ir.hamsayeban.app;
 
 import android.app.Activity;
 import android.os.Bundle;
+import android.os.Build;
+import android.os.CancellationSignal;
+import android.hardware.biometrics.BiometricPrompt;
+import android.hardware.fingerprint.FingerprintManager;
+import android.content.Context;
 import android.graphics.Color;
 import android.content.Intent;
 import android.net.Uri;
@@ -84,6 +89,40 @@ public class MainActivity extends Activity {
     }
 
     private class ExportBridge {
+        @JavascriptInterface public boolean hasBiometric() {
+            if (Build.VERSION.SDK_INT < 28) return false;
+            try {
+                FingerprintManager fp = (FingerprintManager)getSystemService(Context.FINGERPRINT_SERVICE);
+                return fp != null && fp.isHardwareDetected() && fp.hasEnrolledFingerprints();
+            } catch (Exception ex) { return false; }
+        }
+        @JavascriptInterface public void authenticateBiometric() {
+            runOnUiThread(() -> {
+                if (!hasBiometric()) {
+                    Toast.makeText(MainActivity.this, "اثر انگشت ثبت‌شده در دسترس نیست", Toast.LENGTH_LONG).show();
+                    return;
+                }
+                if (Build.VERSION.SDK_INT < 28) return;
+                try {
+                    BiometricPrompt prompt = new BiometricPrompt.Builder(MainActivity.this)
+                        .setTitle("همسایه‌بان")
+                        .setSubtitle("تأیید هویت با اثر انگشت")
+                        .setNegativeButton("انصراف", getMainExecutor(), (dialog, which) -> {})
+                        .build();
+                    prompt.authenticate(new CancellationSignal(), getMainExecutor(),
+                        new BiometricPrompt.AuthenticationCallback() {
+                            @Override public void onAuthenticationSucceeded(BiometricPrompt.AuthenticationResult result) {
+                                webView.evaluateJavascript("window.HamsayebanBiometricSuccess && window.HamsayebanBiometricSuccess()", null);
+                            }
+                            @Override public void onAuthenticationError(int code, CharSequence message) {
+                                Toast.makeText(MainActivity.this, message, Toast.LENGTH_SHORT).show();
+                            }
+                        });
+                } catch (Exception ex) {
+                    Toast.makeText(MainActivity.this, "تأیید اثر انگشت قابل اجرا نیست", Toast.LENGTH_LONG).show();
+                }
+            });
+        }
         @JavascriptInterface public void saveText(String filename, String text, String mime) {
             runOnUiThread(() -> {
                 pendingText = text;
