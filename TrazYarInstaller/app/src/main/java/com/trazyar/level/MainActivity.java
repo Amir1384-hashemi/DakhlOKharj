@@ -55,13 +55,15 @@ public class MainActivity extends Activity implements SensorEventListener {
   };
   final float[] voicePitch={1.25f,1.09f,1.0f,0.90f};
   final float[] voiceSpeed={1.06f,1.04f,1.0f,0.96f};
-  int voiceProfile=0;
+  int voiceProfile=0, measurementMode=0;
+  double tiltDegrees=0, slopePercent=0, edgeAngle=0, referenceAngle=Double.NaN, squareAngle=0;
+  boolean edgeAngleValid=false;
   final float[] gv=new float[3];
   double zeroX=0,zeroY=0,rawX=0,rawY=0,x=0,y=0,tolerance=.5;
   int state=-1, candidate=-1, interval=5000;
   long candidateAt=0,lastVoice=0,lastReading=0;
   SharedPreferences prefs;
-  TextView status, angles, directions; Button start, calibrate; LevelDrawing drawing;
+  TextView status, angles, directions, resultValue, resultDescription; Button start, calibrate, captureReference; LevelDrawing drawing; MeasurementGauge meter;
   final Handler handler=new Handler(Looper.getMainLooper());
   int px(float dp){return Math.round(dp*getResources().getDisplayMetrics().density);}
   GradientDrawable background(int fill,int border,int r) { GradientDrawable g=new GradientDrawable(); g.setColor(fill);g.setCornerRadius(px(r));if(border!=0)g.setStroke(px(1),border);return g; }
@@ -71,7 +73,7 @@ public class MainActivity extends Activity implements SensorEventListener {
   @Override public void onCreate(Bundle b) {
     super.onCreate(b); getWindow().setStatusBarColor(BG);getWindow().setNavigationBarColor(BG);
     prefs=getSharedPreferences("trazyar",MODE_PRIVATE);
-    tolerance=prefs.getFloat("tol",.5f);voice=prefs.getBoolean("voice",true);interval=prefs.getInt("repeat",5000);haptic=prefs.getBoolean("haptic",true);guided=prefs.getBoolean("guided",true);voiceProfile=Math.max(0,Math.min(3,prefs.getInt("voiceProfile",0)));
+    tolerance=prefs.getFloat("tol",.5f);voice=prefs.getBoolean("voice",true);interval=prefs.getInt("repeat",5000);measurementMode=Math.max(0,Math.min(3,prefs.getInt("measurementMode",0)));haptic=prefs.getBoolean("haptic",true);guided=prefs.getBoolean("guided",true);voiceProfile=Math.max(0,Math.min(3,prefs.getInt("voiceProfile",0)));
     manager=(SensorManager)getSystemService(Context.SENSOR_SERVICE);
     vibrator=(Vibrator)getSystemService(Context.VIBRATOR_SERVICE);
     if(manager!=null){sensor=manager.getDefaultSensor(Sensor.TYPE_GRAVITY);if(sensor==null)sensor=manager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);}
@@ -81,7 +83,7 @@ public class MainActivity extends Activity implements SensorEventListener {
       long now=SystemClock.elapsedRealtime();
       if(resumed&&measuring) {
         if(observed&&now-lastReading>3000){observed=false;state=-1;status.setText("ارتباط حسگر قطع شده");stopVoice();}
-        else if(state==0&&observed&&voice&&!speaking&&now-lastVoice>=interval)announceLevel();
+        else if(state==0&&observed&&voice&&!speaking&&now-lastVoice>=interval){if(measurementMode==0)announceLevel();else if(measurementMode==3)announceSquare();}
       }
       handler.postDelayed(this,250);
     }});
@@ -92,15 +94,45 @@ public class MainActivity extends Activity implements SensorEventListener {
     TextView brand=text("◉   تراز یار",30,GREEN);brand.setTypeface(null,1);root.addView(brand);
     root.addView(text("همیشه در سطح درست  •  TRAZYAR",12,GOLD));gap(root,18);
     LinearLayout panel=new LinearLayout(this);panel.setOrientation(1);panel.setPadding(px(11),px(16),px(11),px(17));panel.setBackground(background(PANEL,0xff406E50,23));root.addView(panel);
+    TextView toolTitle=text("ابزار اندازه‌گیری",15,GOLD);panel.addView(toolTitle);
+    Spinner toolSelect=new Spinner(this);
+    String[] toolNames={"◉ تراز حبابی","◡ شیب‌سنج (درجه و درصد)","∠ زاویه‌سنج دیجیتال","□ گونیا (سنجش زاویهٔ ۹۰ درجه)"};
+    toolSelect.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,toolNames));
+    toolSelect.setSelection(measurementMode);panel.addView(toolSelect);
+    toolSelect.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){
+      public void onItemSelected(android.widget.AdapterView<?> p,View v,int position,long id){
+        if(measurementMode!=position){
+          measurementMode=position;prefs.edit().putInt("measurementMode",position).apply();
+          stopVoice();state=-1;candidate=-1;candidateAt=0;
+        }
+        updateModeUI();
+      }
+      public void onNothingSelected(android.widget.AdapterView<?> p){}
+    });
+    gap(panel,7);
     status=text("آمادهٔ اندازه‌گیری",19,GOLD);status.setTypeface(null,1);panel.addView(status);
-    gap(panel,12);drawing=new LevelDrawing(this);panel.addView(drawing,new LinearLayout.LayoutParams(-1,px(410)));
+    gap(panel,12);
+    drawing=new LevelDrawing(this);panel.addView(drawing,new LinearLayout.LayoutParams(-1,px(410)));
+    meter=new MeasurementGauge(this);panel.addView(meter,new LinearLayout.LayoutParams(-1,px(290)));
+    resultValue=text("—",31,GREEN);resultValue.setTypeface(null,1);panel.addView(resultValue);
+    resultDescription=text("",14,MUTED);panel.addView(resultDescription);
+    captureReference=button("📐 ثبت ضلع اول به‌عنوان مرجع",false);
+    panel.addView(captureReference,new LinearLayout.LayoutParams(-1,px(56)));
+    captureReference.setOnClickListener(v->{
+      if(!measuring||!observed||!edgeAngleValid){Toast.makeText(this,"گوشی را عمودی نگه دارید و سنجش را شروع کنید",Toast.LENGTH_LONG).show();return;}
+      referenceAngle=edgeAngle;state=-1;candidate=-1;candidateAt=0;nearArmed=true;
+      stopVoice();
+      Toast.makeText(this,"مرجع ثبت شد؛ لبهٔ گوشی را روی ضلع دوم در همان صفحه قرار دهید.",Toast.LENGTH_LONG).show();
+      refreshMeasureUI();
+    });
+    updateModeUI();
     angles=text("X:  --.-°       Y:  --.-°",18,TEXT);panel.addView(angles);
     directions=text("گوشی را با صفحهٔ رو به بالا روی سطح بگذارید.",13,MUTED);panel.addView(directions);gap(panel,13);
     LinearLayout row=new LinearLayout(this);row.setOrientation(0);panel.addView(row,new LinearLayout.LayoutParams(-1,px(55)));
     start=button("▶ شروع سنجش",true);row.addView(start,new LinearLayout.LayoutParams(0,-1,1));
     calibrate=button("⊕ کالیبره",false);calibrate.setEnabled(false);row.addView(calibrate,new LinearLayout.LayoutParams(0,-1,1));
     start.setOnClickListener(v->{if(measuring)stopMeasure();else startMeasure();});
-    calibrate.setOnClickListener(v->{if(observed){zeroX=rawX;zeroY=rawY;state=-1;candidate=-1;candidateAt=0;previousAnnouncementDistance=Double.NaN;updateLevel();Toast.makeText(this,"کالیبره شد",Toast.LENGTH_SHORT).show();}});
+    calibrate.setOnClickListener(v->{if(measurementMode==0&&observed){zeroX=rawX;zeroY=rawY;state=-1;candidate=-1;candidateAt=0;previousAnnouncementDistance=Double.NaN;updateLevel();Toast.makeText(this,"کالیبره شد",Toast.LENGTH_SHORT).show();}});
     gap(root,16);
     LinearLayout opt=new LinearLayout(this);opt.setOrientation(1);opt.setPadding(px(16),px(13),px(16),px(16));opt.setBackground(background(PANEL,0xff3A6849,20));root.addView(opt);
     TextView voiceTitle=text("🎙️ گویندهٔ طنز و تشویقی فارسی",19,TEXT);opt.addView(voiceTitle);gap(opt,10);
@@ -162,12 +194,12 @@ public class MainActivity extends Activity implements SensorEventListener {
       public void onProgressChanged(SeekBar bar,int n,boolean fromUser){tolerance=.2+n*.1;sens.setText(String.format(Locale.US,"حساسیت: ±%.1f°",tolerance));prefs.edit().putFloat("tol",(float)tolerance).apply();candidate=-1;candidateAt=0;}
       public void onStartTrackingTouch(SeekBar bar){} public void onStopTrackingTouch(SeekBar bar){}
     });
-    gap(root,12);root.addView(text("برای کالیبراسیون از سطح مرجع واقعاً تراز استفاده کنید. دقت به حسگر گوشی وابسته است.",12,MUTED));
-    gap(root,12);root.addView(text("تراز یار • نسخهٔ ۲٫۰ • حباب زنده، راهنمای صوتی و لرزش",11,GOLD));
+    gap(root,12);root.addView(text("زاویه‌سنج و گونیا: گوشی را با صفحهٔ قائم نگه دارید. در گونیا، ضلع اول را ثبت کنید و برای ضلع دوم، گوشی را در همان صفحه بچرخانید. چرخش روی میز افقی با حسگر گرانش اندازه‌گیری نمی‌شود.",12,MUTED));
+    gap(root,12);root.addView(text("تراز یار • نسخهٔ ۲٫۱ • تراز + شیب‌سنج + زاویه‌سنج + گونیا",11,GOLD));
   }
   void startMeasure() {
     if(sensor==null)return;
-    measuring=true;observed=false;lowpassInit=false;zeroX=0;zeroY=0;state=-1;candidate=-1;candidateAt=0;previousAnnouncementDistance=Double.NaN;nearArmed=true;instructionCounter=0;
+    measuring=true;observed=false;lowpassInit=false;zeroX=0;zeroY=0;state=-1;candidate=-1;candidateAt=0;referenceAngle=Double.NaN;previousAnnouncementDistance=Double.NaN;nearArmed=true;instructionCounter=0;
     status.setText("در حال خواندن حسگر...");start.setText("■ توقف سنجش");calibrate.setEnabled(false);
     getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
     if(resumed)manager.registerListener(this,sensor,SensorManager.SENSOR_DELAY_UI);
@@ -176,7 +208,7 @@ public class MainActivity extends Activity implements SensorEventListener {
     measuring=false;observed=false;state=-1;candidate=-1;
     if(manager!=null)manager.unregisterListener(this);
     getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-    start.setText("▶ شروع سنجش");calibrate.setEnabled(false);status.setText("سنجش متوقف شد");angles.setText("X: --.-°       Y: --.-°");drawing.setTilt(0,0,false);stopVoice();
+    start.setText("▶ شروع سنجش");calibrate.setEnabled(false);status.setText("سنجش متوقف شد");angles.setText("X: --.-°       Y: --.-°");drawing.setTilt(0,0,false);resultValue.setText("—");stopVoice();
   }
   // Calibrated axes: with the display facing up, positive gravity X means
   // the phone's right edge is lower and should be raised; positive Y means
@@ -198,6 +230,99 @@ public class MainActivity extends Activity implements SensorEventListener {
     if(!haptic||vibrator==null||!vibrator.hasVibrator())return;
     try{vibrator.vibrate(VibrationEffect.createWaveform(new long[]{0,45,80,75},-1));}
     catch(Exception ignored){}
+  }
+  void updateModeUI(){
+    if(drawing==null||meter==null||captureReference==null)return;
+    boolean bubble=(measurementMode==0);
+    drawing.setVisibility(bubble?View.VISIBLE:View.GONE);
+    meter.setVisibility(bubble?View.GONE:View.VISIBLE);
+    resultValue.setVisibility(bubble?View.GONE:View.VISIBLE);
+    resultDescription.setVisibility(bubble?View.GONE:View.VISIBLE);
+    captureReference.setVisibility(measurementMode==3?View.VISIBLE:View.GONE);
+    if(calibrate!=null)calibrate.setEnabled(measuring&&observed&&bubble);
+    if(meter!=null){meter.setMode(measurementMode);meter.setReading(0,0,false);}
+    refreshMeasureUI();
+  }
+  double angleDifference180(double a,double b){
+    double d=Math.abs(a-b)%180.0;
+    return Math.min(d,180.0-d);
+  }
+  void refreshMeasureUI(){
+    if(meter==null||resultValue==null||resultDescription==null)return;
+    if(measurementMode==0)return;
+    if(!measuring || !observed){
+      resultValue.setText("—");
+      resultDescription.setText(measurementMode==3?"گوشی را قائم نگه دارید و ضلع اول را ثبت کنید.":"برای نمایش زاویه یا شیب، شروع سنجش را بزنید.");
+      return;
+    }
+    if(measurementMode==1){
+      resultValue.setText(String.format(Locale.US,"%.1f°",tiltDegrees));
+      resultDescription.setText(slopePercent>9999?"شیب نزدیک به عمودی؛ درصد شیب بسیار زیاد است":String.format(Locale.US,"شیب سطح: %.1f درصد | صفر درجه = افقی",slopePercent));
+      meter.setReading(tiltDegrees,0,true);
+      status.setText("◡  شیب‌سنج");
+    }else if(measurementMode==2){
+      if(!edgeAngleValid){
+        resultValue.setText("—");
+        resultDescription.setText("گوشی را از حالت خوابیده خارج و در صفحه‌ای عمودی نگه دارید.");
+        status.setText("زاویهٔ نامعتبر در حالت تخت");
+        meter.setReading(0,0,false);
+      }else{
+        resultValue.setText(String.format(Locale.US,"%.1f°",edgeAngle));
+        resultDescription.setText("زاویهٔ لبهٔ گوشی در صفحهٔ عمودی (۰ تا ۱۸۰ درجه)");
+        status.setText("∠  زاویه‌سنج فعال");
+        meter.setReading(edgeAngle,0,true);
+      }
+    }else if(measurementMode==3){
+      if(!edgeAngleValid){
+        resultValue.setText("—");
+        resultDescription.setText("گوشی را قائم نگه دارید؛ اندازه‌گیری در حالت تخت ممکن نیست.");
+        meter.setReading(0,90,false);
+        status.setText("□  گونیا: گوشی را قائم کنید");
+      }else if(Double.isNaN(referenceAngle)){
+        resultValue.setText("مرجع ثبت نشده");
+        resultDescription.setText("لبهٔ گوشی را روی ضلع اول قرار داده و «ثبت ضلع اول» را بزنید.");
+        status.setText("□  آمادهٔ ثبت ضلع اول");
+        meter.setReading(0,90,false);
+      }else{
+        squareAngle=angleDifference180(edgeAngle,referenceAngle);
+        double error=Math.abs(90.0-squareAngle);
+        resultValue.setText(String.format(Locale.US,"%.1f° / 90°",squareAngle));
+        resultDescription.setText(String.format(Locale.US,"اختلاف با زاویهٔ قائمه: %.1f درجه | اندازه‌گیری در یک صفحه",error));
+        meter.setReading(squareAngle,90,true);
+        status.setText(state==1?"✓  زاویهٔ قائمه برقرار است":state==0?"□  نزدیک به ۹۰ درجه تنظیم کنید":"□  سنجش گونیا");
+        status.setTextColor(state==1?GREEN:GOLD);
+      }
+    }
+  }
+  void updateSquare(){
+    if(!edgeAngleValid || Double.isNaN(referenceAngle)){
+      state=-1;candidate=-1;refreshMeasureUI();return;
+    }
+    squareAngle=angleDifference180(edgeAngle,referenceAngle);
+    double error=Math.abs(90-squareAngle);
+    long now=SystemClock.elapsedRealtime();
+    double nearLimit=Math.max(4.0,tolerance*3);
+    if(error>nearLimit+1)nearArmed=true;
+    if(error<=nearLimit&&nearArmed&&error>tolerance){
+      nearArmed=false;vibrateNear();
+    }
+    int wanted=error<=Math.max(tolerance,.6)?1:0;
+    if(wanted!=candidate){candidate=wanted;candidateAt=now;}
+    if(now-candidateAt>=750&&wanted!=state){
+      state=wanted;stopVoice();
+      if(state==1){vibrateSuccess();meter.celebrate();}
+      if(voice)announceSquare();
+    }
+    refreshMeasureUI();
+  }
+  void announceSquare(){
+    if(!resumed||!voice||!observed||!edgeAngleValid||Double.isNaN(referenceAngle))return;
+    double error=Math.abs(90-squareAngle);
+    if(state==1){playClip(successAudio[voiceProfile][(successIdx++)%successAudio[voiceProfile].length],false);}
+    else if(state==0){
+      if(error<=7)playClip(nearAudio[voiceProfile][(nearIdx++)%nearAudio[voiceProfile].length],false);
+      else playClip(farAudio[voiceProfile][(farIdx++)%farAudio[voiceProfile].length],false);
+    }
   }
   void updateLevel(){
     x=rawX-zeroX; y=rawY-zeroY;
@@ -234,7 +359,16 @@ public class MainActivity extends Activity implements SensorEventListener {
     lowpassInit=true;
     double gz=Math.max(.0001,Math.abs(gv[2]));
     rawX=Math.toDegrees(Math.atan2(gv[0],gz));rawY=Math.toDegrees(Math.atan2(gv[1],gz));
-    observed=true;lastReading=SystemClock.elapsedRealtime();calibrate.setEnabled(true);updateLevel();
+    double horizontal=Math.hypot(gv[0],gv[1]);
+    tiltDegrees=Math.toDegrees(Math.atan2(horizontal,Math.abs(gv[2])));
+    slopePercent=Math.abs(gv[2])<0.08?Double.POSITIVE_INFINITY:100.0*horizontal/Math.abs(gv[2]);
+    edgeAngleValid=horizontal>2.5;
+    if(edgeAngleValid)edgeAngle=(Math.toDegrees(Math.atan2(gv[0],gv[1]))+360.0)%180.0;
+    observed=true;lastReading=SystemClock.elapsedRealtime();
+    calibrate.setEnabled(measurementMode==0);
+    if(measurementMode==0)updateLevel();
+    else if(measurementMode==3)updateSquare();
+    else refreshMeasureUI();
   }
   @Override public void onAccuracyChanged(Sensor s,int accuracy){}
   // Select the joke by calibrated two-axis error and movement trend.
@@ -373,9 +507,67 @@ public class MainActivity extends Activity implements SensorEventListener {
       }
       // Two calibrated graduated liquid tubes below the round spirit level.
       float left=27,right=w-27;
-      tube(c,left,right,h-72,dx,"X");
-      tube(c,left,right,h-26,dy,"Y");
+      tube(c,left,right,h-72,(float)dx,"X");
+      tube(c,left,right,h-26,(float)dy,"Y");
       if(Math.abs(bubbleX-desiredX)>0.3||Math.abs(bubbleY-desiredY)>0.3)postInvalidateOnAnimation();
     }
   }
+  static class MeasurementGauge extends View {
+    final Paint p=new Paint(3);
+    float angle=0,target=0;
+    boolean valid=false;
+    int mode=1;
+    long winAt=0;
+    MeasurementGauge(Context context){super(context);}
+    void setMode(int m){mode=m;invalidate();}
+    void setReading(double reading,double goal,boolean ok){angle=(float)reading;target=(float)goal;valid=ok;postInvalidateOnAnimation();}
+    void celebrate(){winAt=SystemClock.uptimeMillis();postInvalidateOnAnimation();}
+    @Override protected void onDraw(Canvas c){
+      super.onDraw(c);
+      float w=getWidth(),h=getHeight();
+      float cx=w/2,cy=h-40;
+      float r=Math.min(w*.41f,h*.78f);
+      p.setAntiAlias(true);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(13);
+      p.setColor(0xff22462F);
+      c.drawArc(cx-r,cy-r,cx+r,cy+r,180,180,false,p);
+      p.setColor(0xffD2B878);p.setStrokeWidth(3);
+      c.drawArc(cx-r,cy-r,cx+r,cy+r,180,180,false,p);
+      p.setTextAlign(Paint.Align.CENTER);p.setStyle(Paint.Style.FILL);
+      for(int i=0;i<=18;i++){
+        double theta=Math.PI*(1.0+i/18.0);
+        float co=(float)Math.cos(theta),si=(float)Math.sin(theta);
+        float x1=cx+co*(r-15),y1=cy+si*(r-15),x2=cx+co*(r-((i%3==0)?34:25)),y2=cy+si*(r-((i%3==0)?34:25));
+        p.setColor(i%3==0?0xffE2D194:0xff739779);p.setStrokeWidth(i%3==0?2.5f:1.3f);
+        c.drawLine(x1,y1,x2,y2,p);
+        if(i%3==0){
+          p.setColor(0xffC3D5BD);p.setTextSize(13*getResources().getDisplayMetrics().scaledDensity);
+          c.drawText(String.valueOf(mode==1?i*5:i*10),cx+co*(r-53),cy+si*(r-53)+5,p);
+        }
+      }
+      float dialMax=mode==1?90:180;
+      if(mode==3)dialMax=90;
+      float a=valid?Math.max(0,Math.min(dialMax,angle)):0;
+      double theta=Math.PI+(Math.PI*a/dialMax);
+      p.setStyle(Paint.Style.STROKE);p.setStrokeCap(Paint.Cap.ROUND);
+      p.setStrokeWidth(5);
+      p.setColor(valid?0xffB9F579:0xff667E67);
+      c.drawLine(cx,cy,cx+(float)Math.cos(theta)*(r-38),cy+(float)Math.sin(theta)*(r-38),p);
+      p.setStyle(Paint.Style.FILL);p.setColor(0xffDCCB83);c.drawCircle(cx,cy,8,p);
+      if(mode==3){
+        p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(5);p.setColor(0xffBBDD8D);
+        float size=47;
+        c.drawLine(cx+60,cy-20,cx+60,cy-20-size,p);
+        c.drawLine(cx+60,cy-20,cx+60+size,cy-20,p);
+      }
+      if(winAt>0){
+        long time=SystemClock.uptimeMillis()-winAt;
+        if(time<800){
+          p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(4);p.setColor((int)((180*(1-time/800f)))<<24|0x00A8ED65);
+          c.drawCircle(cx,cy,25+time*.045f,p);
+          postInvalidateOnAnimation();
+        }
+      }
+    }
+  }
+
 }
