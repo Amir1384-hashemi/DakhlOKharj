@@ -24,7 +24,7 @@ public class MainActivity extends Activity implements SensorEventListener {
   SensorManager manager; Sensor sensor; Vibrator vibrator;
   final BeepEngine beeper=new BeepEngine();
   boolean measuring=false,resumed=false,observed=false,lowpassInit=false;
-  boolean haptic=true,beepEnabled=true,nearArmed=true;
+  boolean haptic=true,beepEnabled=true,nearArmed=true,tutorialOpen=false;
   float beepVolume=.70f;
   long previewUntil=0;
   double previewError=12;
@@ -57,6 +57,12 @@ public class MainActivity extends Activity implements SensorEventListener {
     buildUI();
     if(sensor==null){start.setEnabled(false);status.setText("حسگر مناسب پیدا نشد");sensorStatus.setText("این گوشی حسگر شتاب/گرانش مورد نیاز را ندارد.");}
     else startMeasure(); // Begin sensor measurement automatically; tool tabs remain one-tap.
+    if(!prefs.getBoolean("tutorialSeenV26",false)){
+      prefs.edit().putBoolean("tutorialSeenV26",true).apply();
+      handler.postDelayed(()->{
+        if(!isFinishing()&&!isDestroyed())openTutorial(0);
+      },750);
+    }
     handler.post(new Runnable(){public void run() {
       long now=SystemClock.elapsedRealtime();
       if(resumed&&measuring&&observed&&now-lastReading>3000){
@@ -70,7 +76,11 @@ public class MainActivity extends Activity implements SensorEventListener {
     ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);scroll.setBackgroundColor(BG);
     LinearLayout root=new LinearLayout(this);root.setOrientation(1);root.setPadding(px(16),px(18),px(16),px(30));root.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);scroll.addView(root);setContentView(scroll);
     TextView brand=text("◉   تراز یار",30,GREEN);brand.setTypeface(null,1);root.addView(brand);
-    root.addView(text("همیشه در سطح درست  •  TRAZYAR",12,GOLD));gap(root,18);
+    root.addView(text("همیشه در سطح درست  •  TRAZYAR",12,GOLD));gap(root,10);
+    Button helpButton=button("📖 آموزش استفاده از چهار ابزار",false);
+    root.addView(helpButton,new LinearLayout.LayoutParams(-1,px(52)));
+    helpButton.setOnClickListener(v->openTutorial(TutorialContent.pageForTool(measurementMode)));
+    gap(root,13);
     LinearLayout panel=new LinearLayout(this);panel.setOrientation(1);panel.setPadding(px(11),px(16),px(11),px(17));panel.setBackground(background(PANEL,0xff406E50,23));root.addView(panel);
     TextView toolTitle=text("ابزار را انتخاب کنید",17,GOLD);toolTitle.setTypeface(null,1);panel.addView(toolTitle);
     String[] shortNames={"◉ تراز حبابی","↗ شیب‌سنج","∠ زاویه‌سنج","□ گونیا"};
@@ -187,7 +197,23 @@ public class MainActivity extends Activity implements SensorEventListener {
       public void onStartTrackingTouch(SeekBar bar){} public void onStopTrackingTouch(SeekBar bar){}
     });
     gap(root,12);root.addView(text("زاویه‌سنج و گونیا: گوشی را با صفحهٔ قائم نگه دارید. در گونیا، ضلع اول را ثبت کنید و برای ضلع دوم، گوشی را در همان صفحه بچرخانید. چرخش روی میز افقی با حسگر گرانش اندازه‌گیری نمی‌شود.",12,MUTED));
-    gap(root,12);root.addView(text("تراز یار • نسخهٔ ۲٫۵ • بوق فقط برای تراز حبابی",11,GOLD));
+    gap(root,12);root.addView(text("تراز یار • نسخهٔ ۲٫۶ • آموزش کاربری + بوق فقط در تراز",11,GOLD));
+  }
+  void openTutorial(int firstPage){
+    if(tutorialOpen)return;
+    tutorialOpen=true;
+    previewUntil=0;
+    beeper.update(false,20,tolerance,false,beepVolume);
+    HelpDialog.show(this,firstPage,
+      mode->{
+        tutorialOpen=false;
+        selectMode(mode);
+      },
+      ()->{
+        tutorialOpen=false;
+        refreshBeep();
+      }
+    );
   }
   void startMeasure() {
     if(sensor==null)return;
@@ -401,6 +427,10 @@ public class MainActivity extends Activity implements SensorEventListener {
     handler.postDelayed(()->refreshBeep(),2050);
   }
   void refreshBeep(){
+    if(tutorialOpen){
+      beeper.update(false,20,tolerance,false,beepVolume);
+      return;
+    }
     // Enforce silence for inclinometer, angle meter, and carpenter's square
     // BEFORE preview handling. No other tool may emit a beep.
     if(!BeepPattern.allowedMode(measurementMode)){

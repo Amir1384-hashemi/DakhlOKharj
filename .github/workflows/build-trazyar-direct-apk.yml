@@ -29,6 +29,11 @@ jobs:
           mkdir -p /tmp/trazyar-beep-tests
           javac -encoding UTF-8 -d /tmp/trazyar-beep-tests TrazYarInstaller/app/src/main/java/com/trazyar/level/BeepPattern.java TrazYarInstaller/verification/BeepPatternTest.java
           java -cp /tmp/trazyar-beep-tests com.trazyar.level.BeepPatternTest
+      - name: Validate offline Persian help pages
+        run: |
+          mkdir -p /tmp/trazyar-help-tests
+          javac -encoding UTF-8 -d /tmp/trazyar-help-tests TrazYarInstaller/app/src/main/java/com/trazyar/level/TutorialContent.java TrazYarInstaller/verification/TutorialContentTest.java
+          java -cp /tmp/trazyar-help-tests com.trazyar.level.TutorialContentTest
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
@@ -37,10 +42,10 @@ jobs:
         run: gradle --no-daemon :app:assembleDebug
       - name: Publish downloadable APK on isolated branch
         run: |
-          cp TrazYarInstaller/app/build/outputs/apk/debug/app-debug.apk TrazYar_Samsung_v2_5_LevelOnlyBeep.apk
-          test -s TrazYar_Samsung_v2_5_LevelOnlyBeep.apk
+          cp TrazYarInstaller/app/build/outputs/apk/debug/app-debug.apk TrazYar_Samsung_v2_6_Tutorial.apk
+          test -s TrazYar_Samsung_v2_6_Tutorial.apk
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -f TrazYar_Samsung_v2_5_LevelOnlyBeep.apk
-          git commit -m "Publish installable TrazYar 2.5 beeps only for the bubble level APK [skip ci]"
+          git add -f TrazYar_Samsung_v2_6_Tutorial.apk
+          git commit -m "Publish installable TrazYar 2.6 offline tutorial and bubble-only beep APK [skip ci]"
           git push origin HEAD:trazyar-direct-install
