@@ -384,8 +384,8 @@ document.addEventListener('click',async e=>{const el=e.target.closest('[data-act
  case 'theme-select':prefs.theme=el.dataset.value;savePrefs();render();break;
  case 'language-select':prefs.language=el.dataset.value;savePrefs();render();break;
  case 'open-guide':showGuide();break;
- case 'biometric-toggle':{if(prefs.fingerprint){prefs.fingerprint=false;savePrefs();render();toast('ورود با اثر انگشت غیرفعال شد.');break;}if(!prefs.pinHash)throw Error('ابتدا رمز ورود ۴ تا ۸ رقمی تنظیم کنید.');if(!window.HamsayebanBridge?.hasBiometric?.())throw Error('حسگر اثر انگشت ثبت‌شده یا اندروید ۹ به بالا در دسترس نیست.');biometricEnrollPending=true;window.HamsayebanBridge.authenticateBiometric();break;}
- case 'biometric-login':if(window.HamsayebanBridge?.hasBiometric?.())window.HamsayebanBridge.authenticateBiometric();else throw Error('اثر انگشت روی این دستگاه در دسترس نیست.');break;
+ case 'biometric-toggle':{if(prefs.fingerprint){prefs.fingerprint=false;savePrefs();render();toast('ورود با اثر انگشت غیرفعال شد.');break;}if(!prefs.pinHash)throw Error('ابتدا رمز ورود ۴ تا ۸ رقمی تنظیم کنید.');if(!window.HamsayebanBridge?.hasBiometric?.())throw Error('حسگر اثر انگشت ثبت‌شده یا اندروید ۹ به بالا در دسترس نیست.');biometricEnrollPending=true;window.HamsayebanBridge.authenticateBiometric(prefs.language);break;}
+ case 'biometric-login':if(window.HamsayebanBridge?.hasBiometric?.())window.HamsayebanBridge.authenticateBiometric(prefs.language);else throw Error('اثر انگشت روی این دستگاه در دسترس نیست.');break;
  case 'disable-pin':showModal('حذف رمز ورود',`<form id="pin-remove-form" class="form-grid">${field('رمز فعلی','oldPin','password','','required')}<button class="btn primary full">تأیید و حذف رمز</button></form>`);break;
  }}catch(err){toast(err.message||'خطا در تنظیمات.');}});
 // Additional form handlers: no fake buttons or dummy financial operations.
