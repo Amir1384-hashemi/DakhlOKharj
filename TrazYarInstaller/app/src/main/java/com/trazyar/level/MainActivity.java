@@ -61,9 +61,9 @@ public class MainActivity extends Activity implements SensorEventListener {
   final float[] gv=new float[3];
   double zeroX=0,zeroY=0,rawX=0,rawY=0,x=0,y=0,tolerance=.5;
   int state=-1, candidate=-1, interval=5000;
-  long candidateAt=0,lastVoice=0,lastReading=0;
+  long candidateAt=0,lastVoice=0,lastReading=0,lastSensorUi=0;
   SharedPreferences prefs;
-  TextView status, angles, directions, resultValue, resultDescription, modeHint;
+  TextView status, angles, directions, resultValue, resultDescription, modeHint, sensorStatus;
   Button start, calibrate, captureReference;
   final Button[] toolButtons=new Button[4];
   LevelDrawing drawing; MeasurementGauge meter;
@@ -81,12 +81,12 @@ public class MainActivity extends Activity implements SensorEventListener {
     vibrator=(Vibrator)getSystemService(Context.VIBRATOR_SERVICE);
     if(manager!=null){sensor=manager.getDefaultSensor(Sensor.TYPE_GRAVITY);if(sensor==null)sensor=manager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);}
     buildUI();
-    if(sensor==null){start.setEnabled(false);status.setText("حسگر مناسب پیدا نشد");}
+    if(sensor==null){start.setEnabled(false);status.setText("حسگر مناسب پیدا نشد");sensorStatus.setText("این گوشی حسگر شتاب/گرانش مورد نیاز را ندارد.");}
     else startMeasure(); // Begin sensor measurement automatically; tool tabs remain one-tap.
     handler.post(new Runnable(){public void run() {
       long now=SystemClock.elapsedRealtime();
       if(resumed&&measuring) {
-        if(observed&&now-lastReading>3000){observed=false;state=-1;status.setText("ارتباط حسگر قطع شده");stopVoice();}
+        if(observed&&now-lastReading>3000){observed=false;state=-1;status.setText("ارتباط حسگر قطع شده");sensorStatus.setText("حسگر: دادهٔ جدیدی دریافت نمی‌شود");stopVoice();}
         else if(state==0&&observed&&voice&&!speaking&&now-lastVoice>=interval){if(measurementMode==0)announceLevel();else if(measurementMode==3)announceSquare();}
       }
       handler.postDelayed(this,250);
@@ -122,6 +122,8 @@ public class MainActivity extends Activity implements SensorEventListener {
     panel.addView(modeHint);
     gap(panel,7);
     status=text("آمادهٔ اندازه‌گیری",19,GOLD);status.setTypeface(null,1);panel.addView(status);
+    sensorStatus=text("حسگر: در انتظار دریافت داده",12,MUTED);
+    panel.addView(sensorStatus);
 
     LinearLayout row=new LinearLayout(this);row.setOrientation(LinearLayout.HORIZONTAL);
     row.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
@@ -221,7 +223,7 @@ public class MainActivity extends Activity implements SensorEventListener {
       public void onStartTrackingTouch(SeekBar bar){} public void onStopTrackingTouch(SeekBar bar){}
     });
     gap(root,12);root.addView(text("زاویه‌سنج و گونیا: گوشی را با صفحهٔ قائم نگه دارید. در گونیا، ضلع اول را ثبت کنید و برای ضلع دوم، گوشی را در همان صفحه بچرخانید. چرخش روی میز افقی با حسگر گرانش اندازه‌گیری نمی‌شود.",12,MUTED));
-    gap(root,12);root.addView(text("تراز یار • نسخهٔ ۲٫۲ • چهار ابزار مستقل و انتخاب واضح",11,GOLD));
+    gap(root,12);root.addView(text("تراز یار • نسخهٔ ۲٫۳ • چهار ابزار + محاسبات آزموده‌شده",11,GOLD));
   }
   void startMeasure() {
     if(sensor==null)return;
@@ -305,10 +307,7 @@ public class MainActivity extends Activity implements SensorEventListener {
     }
     refreshMeasureUI();
   }
-  double angleDifference180(double a,double b){
-    double d=Math.abs(a-b)%180.0;
-    return Math.min(d,180.0-d);
-  }
+  double angleDifference180(double a,double b){return LevelMath.angleBetweenLines(a,b);}
   void refreshMeasureUI(){
     if(meter==null||resultValue==null||resultDescription==null)return;
     if(measurementMode==0)return;
@@ -325,19 +324,19 @@ public class MainActivity extends Activity implements SensorEventListener {
     }else if(measurementMode==2){
       if(!edgeAngleValid){
         resultValue.setText("—");
-        resultDescription.setText("گوشی را از حالت خوابیده خارج و در صفحه‌ای عمودی نگه دارید.");
+        resultDescription.setText("برای زاویه‌سنج، گوشی را تقریباً قائم بگیرید؛ در حالت تخت حسگر زاویهٔ این صفحه را نمی‌خواند.");
         status.setText("زاویهٔ نامعتبر در حالت تخت");
         meter.setReading(0,0,false);
       }else{
         resultValue.setText(String.format(Locale.US,"%.1f°",edgeAngle));
-        resultDescription.setText("زاویهٔ لبهٔ گوشی در صفحهٔ عمودی (۰ تا ۱۸۰ درجه)");
+        resultDescription.setText("زاویهٔ لبهٔ بلند گوشی نسبت به افق، در صفحهٔ عمودی");
         status.setText("∠  زاویه‌سنج فعال");
         meter.setReading(edgeAngle,0,true);
       }
     }else if(measurementMode==3){
       if(!edgeAngleValid){
         resultValue.setText("—");
-        resultDescription.setText("گوشی را قائم نگه دارید؛ اندازه‌گیری در حالت تخت ممکن نیست.");
+        resultDescription.setText("برای گونیا، گوشی را تقریباً قائم بگیرید. حالت تخت مناسب نیست.");
         meter.setReading(0,90,false);
         status.setText("□  گونیا: گوشی را قائم کنید");
       }else if(Double.isNaN(referenceAngle)){
@@ -421,12 +420,16 @@ public class MainActivity extends Activity implements SensorEventListener {
     lowpassInit=true;
     double gz=Math.max(.0001,Math.abs(gv[2]));
     rawX=Math.toDegrees(Math.atan2(gv[0],gz));rawY=Math.toDegrees(Math.atan2(gv[1],gz));
-    double horizontal=Math.hypot(gv[0],gv[1]);
-    tiltDegrees=Math.toDegrees(Math.atan2(horizontal,Math.abs(gv[2])));
-    slopePercent=Math.abs(gv[2])<0.08?Double.POSITIVE_INFINITY:100.0*horizontal/Math.abs(gv[2]);
-    edgeAngleValid=horizontal>2.5;
-    if(edgeAngleValid)edgeAngle=(Math.toDegrees(Math.atan2(gv[0],gv[1]))+360.0)%180.0;
+    tiltDegrees=LevelMath.inclineDegrees(gv[0],gv[1],gv[2]);
+    slopePercent=LevelMath.slopePercent(gv[0],gv[1],gv[2]);
+    edgeAngleValid=LevelMath.canMeasureEdge(gv[0],gv[1],gv[2]);
+    if(edgeAngleValid)edgeAngle=LevelMath.edgeFromHorizontal(gv[0],gv[1]);
     observed=true;lastReading=SystemClock.elapsedRealtime();
+    if(lastReading-lastSensorUi>600){
+      lastSensorUi=lastReading;
+      sensorStatus.setText("● حسگر فعال  |  "+(sensor.getType()==Sensor.TYPE_GRAVITY?"گرانش":"شتاب‌سنج")+"  |  "+String.format(Locale.US,"%.1f°",tiltDegrees));
+      sensorStatus.setTextColor(GREEN);
+    }
     calibrate.setEnabled(measurementMode==0);
     if(measurementMode==0)updateLevel();
     else if(measurementMode==3)updateSquare();
