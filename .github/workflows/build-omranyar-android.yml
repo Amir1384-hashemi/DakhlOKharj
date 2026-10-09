@@ -49,7 +49,9 @@ jobs:
           python3 tools/apply_branding.py
       - name: Download dependencies
         working-directory: ${{ env.BUILD_DIR }}
-        run: flutter pub get
+        run: |
+          flutter pub add --dev flutter_lints
+          flutter pub get
       - name: Static analysis
         working-directory: ${{ env.BUILD_DIR }}
         run: flutter analyze --no-fatal-infos
