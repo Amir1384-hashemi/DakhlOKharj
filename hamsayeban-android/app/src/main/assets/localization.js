@@ -43,6 +43,7 @@ function convert(text,lang){
  return s;
 }
 const langs=['fa','en','ar','tr'];
+const localizedText=new WeakMap();const localizedAttrs=new WeakMap();
 window.HB_LOCALIZE=function(lang){
  if(!langs.includes(lang))lang='fa';
  const root=document.body;
@@ -52,11 +53,11 @@ window.HB_LOCALIZE=function(lang){
  if(lang==='fa')return;
  const w=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);
  const list=[];while(w.nextNode())list.push(w.currentNode);
- for(const node of list){const p=node.parentElement;if(!p||p.closest('script,style'))continue;const next=convert(node.nodeValue,lang);if(next!==node.nodeValue)node.nodeValue=next;}
+ for(const node of list){const p=node.parentElement;if(!p||p.closest('script,style'))continue;const prev=localizedText.get(node),old=node.nodeValue;const original=prev&&old===prev.output?prev.original:old;const next=convert(original,lang);localizedText.set(node,{lang,original,output:next});if(next!==old)node.nodeValue=next;}
  const fields=root.querySelectorAll('[title],[placeholder],[aria-label],[alt],input,textarea');
  for(const el of fields){
-  for(const key of ['title','placeholder','aria-label','alt'])if(el.hasAttribute(key)){const old=el.getAttribute(key),value=convert(old,lang);if(old!==value)el.setAttribute(key,value);}
-  if((el.matches('input,textarea'))&&el.value&&faChars.test(el.value)&&(!el.type||['text','tel','search','textarea'].includes(el.type))){
+  for(const key of ['title','placeholder','aria-label','alt'])if(el.hasAttribute(key)){const old=el.getAttribute(key);let entries=localizedAttrs.get(el);if(!entries){entries={};localizedAttrs.set(el,entries)}const prev=entries[key];const source=prev&&prev.output===old?prev.original:old;const value=convert(source,lang);entries[key]={lang,original:source,output:value};if(old!==value)el.setAttribute(key,value);}
+  if((el.matches('input,textarea'))&&el.value&&faChars.test(el.value)&&(!el.type||['text','tel','search','textarea'].includes(el.type))&&el.dataset.hbShown!==el.value){
    el.dataset.hbOriginal=el.value;
    const converted=convert(el.value,lang);
    el.value=converted;
