@@ -63,7 +63,10 @@ public class MainActivity extends Activity implements SensorEventListener {
   int state=-1, candidate=-1, interval=5000;
   long candidateAt=0,lastVoice=0,lastReading=0;
   SharedPreferences prefs;
-  TextView status, angles, directions, resultValue, resultDescription; Button start, calibrate, captureReference; LevelDrawing drawing; MeasurementGauge meter;
+  TextView status, angles, directions, resultValue, resultDescription, modeHint;
+  Button start, calibrate, captureReference;
+  final Button[] toolButtons=new Button[4];
+  LevelDrawing drawing; MeasurementGauge meter;
   final Handler handler=new Handler(Looper.getMainLooper());
   int px(float dp){return Math.round(dp*getResources().getDisplayMetrics().density);}
   GradientDrawable background(int fill,int border,int r) { GradientDrawable g=new GradientDrawable(); g.setColor(fill);g.setCornerRadius(px(r));if(border!=0)g.setStroke(px(1),border);return g; }
@@ -79,6 +82,7 @@ public class MainActivity extends Activity implements SensorEventListener {
     if(manager!=null){sensor=manager.getDefaultSensor(Sensor.TYPE_GRAVITY);if(sensor==null)sensor=manager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);}
     buildUI();
     if(sensor==null){start.setEnabled(false);status.setText("حسگر مناسب پیدا نشد");}
+    else startMeasure(); // Begin sensor measurement automatically; tool tabs remain one-tap.
     handler.post(new Runnable(){public void run() {
       long now=SystemClock.elapsedRealtime();
       if(resumed&&measuring) {
@@ -94,23 +98,48 @@ public class MainActivity extends Activity implements SensorEventListener {
     TextView brand=text("◉   تراز یار",30,GREEN);brand.setTypeface(null,1);root.addView(brand);
     root.addView(text("همیشه در سطح درست  •  TRAZYAR",12,GOLD));gap(root,18);
     LinearLayout panel=new LinearLayout(this);panel.setOrientation(1);panel.setPadding(px(11),px(16),px(11),px(17));panel.setBackground(background(PANEL,0xff406E50,23));root.addView(panel);
-    TextView toolTitle=text("ابزار اندازه‌گیری",15,GOLD);panel.addView(toolTitle);
-    Spinner toolSelect=new Spinner(this);
-    String[] toolNames={"◉ تراز حبابی","◡ شیب‌سنج (درجه و درصد)","∠ زاویه‌سنج دیجیتال","□ گونیا (سنجش زاویهٔ ۹۰ درجه)"};
-    toolSelect.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,toolNames));
-    toolSelect.setSelection(measurementMode);panel.addView(toolSelect);
-    toolSelect.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){
-      public void onItemSelected(android.widget.AdapterView<?> p,View v,int position,long id){
-        if(measurementMode!=position){
-          measurementMode=position;prefs.edit().putInt("measurementMode",position).apply();
-          stopVoice();state=-1;candidate=-1;candidateAt=0;
-        }
-        updateModeUI();
+    TextView toolTitle=text("ابزار را انتخاب کنید",17,GOLD);toolTitle.setTypeface(null,1);panel.addView(toolTitle);
+    String[] shortNames={"◉ تراز حبابی","↗ شیب‌سنج","∠ زاویه‌سنج","□ گونیا"};
+    for(int rowNum=0;rowNum<2;rowNum++){
+      LinearLayout tabRow=new LinearLayout(this);
+      tabRow.setOrientation(LinearLayout.HORIZONTAL);
+      tabRow.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
+      panel.addView(tabRow,new LinearLayout.LayoutParams(-1,px(58)));
+      for(int col=0;col<2;col++){
+        int mode=rowNum*2+col;
+        Button tab=button(shortNames[mode],false);
+        tab.setTextSize(15);
+        tab.setMinWidth(0);
+        tab.setPadding(px(2),0,px(2),0);
+        LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,px(53),1);
+        lp.setMargins(px(3),px(2),px(3),px(2));
+        tabRow.addView(tab,lp);
+        toolButtons[mode]=tab;
+        tab.setOnClickListener(v->selectMode(mode));
       }
-      public void onNothingSelected(android.widget.AdapterView<?> p){}
-    });
+    }
+    modeHint=text("",13,MUTED);
+    panel.addView(modeHint);
     gap(panel,7);
     status=text("آمادهٔ اندازه‌گیری",19,GOLD);status.setTypeface(null,1);panel.addView(status);
+
+    LinearLayout row=new LinearLayout(this);row.setOrientation(LinearLayout.HORIZONTAL);
+    row.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
+    panel.addView(row,new LinearLayout.LayoutParams(-1,px(56)));
+    start=button("▶ شروع سنجش",true);
+    LinearLayout.LayoutParams sparams=new LinearLayout.LayoutParams(0,-1,1);sparams.setMargins(px(3),0,px(3),0);
+    row.addView(start,sparams);
+    calibrate=button("⊕ کالیبره",false);calibrate.setEnabled(false);
+    LinearLayout.LayoutParams cparams=new LinearLayout.LayoutParams(0,-1,1);cparams.setMargins(px(3),0,px(3),0);
+    row.addView(calibrate,cparams);
+    start.setOnClickListener(v->{if(measuring)stopMeasure();else startMeasure();});
+    calibrate.setOnClickListener(v->{if(measurementMode==0&&observed){
+      zeroX=rawX;zeroY=rawY;state=-1;candidate=-1;candidateAt=0;
+      previousAnnouncementDistance=Double.NaN;updateLevel();
+      Toast.makeText(this,"کالیبره شد",Toast.LENGTH_SHORT).show();
+    }});
+    gap(panel,9);
+
     gap(panel,12);
     drawing=new LevelDrawing(this);panel.addView(drawing,new LinearLayout.LayoutParams(-1,px(410)));
     meter=new MeasurementGauge(this);panel.addView(meter,new LinearLayout.LayoutParams(-1,px(290)));
@@ -125,14 +154,11 @@ public class MainActivity extends Activity implements SensorEventListener {
       Toast.makeText(this,"مرجع ثبت شد؛ لبهٔ گوشی را روی ضلع دوم در همان صفحه قرار دهید.",Toast.LENGTH_LONG).show();
       refreshMeasureUI();
     });
-    updateModeUI();
     angles=text("X:  --.-°       Y:  --.-°",18,TEXT);panel.addView(angles);
-    directions=text("گوشی را با صفحهٔ رو به بالا روی سطح بگذارید.",13,MUTED);panel.addView(directions);gap(panel,13);
-    LinearLayout row=new LinearLayout(this);row.setOrientation(0);panel.addView(row,new LinearLayout.LayoutParams(-1,px(55)));
-    start=button("▶ شروع سنجش",true);row.addView(start,new LinearLayout.LayoutParams(0,-1,1));
-    calibrate=button("⊕ کالیبره",false);calibrate.setEnabled(false);row.addView(calibrate,new LinearLayout.LayoutParams(0,-1,1));
-    start.setOnClickListener(v->{if(measuring)stopMeasure();else startMeasure();});
-    calibrate.setOnClickListener(v->{if(measurementMode==0&&observed){zeroX=rawX;zeroY=rawY;state=-1;candidate=-1;candidateAt=0;previousAnnouncementDistance=Double.NaN;updateLevel();Toast.makeText(this,"کالیبره شد",Toast.LENGTH_SHORT).show();}});
+    directions=text("گوشی را با صفحهٔ رو به بالا روی سطح بگذارید.",13,MUTED);
+    panel.addView(directions);gap(panel,13);
+    updateModeUI();
+
     gap(root,16);
     LinearLayout opt=new LinearLayout(this);opt.setOrientation(1);opt.setPadding(px(16),px(13),px(16),px(16));opt.setBackground(background(PANEL,0xff3A6849,20));root.addView(opt);
     TextView voiceTitle=text("🎙️ گویندهٔ طنز و تشویقی فارسی",19,TEXT);opt.addView(voiceTitle);gap(opt,10);
@@ -195,7 +221,7 @@ public class MainActivity extends Activity implements SensorEventListener {
       public void onStartTrackingTouch(SeekBar bar){} public void onStopTrackingTouch(SeekBar bar){}
     });
     gap(root,12);root.addView(text("زاویه‌سنج و گونیا: گوشی را با صفحهٔ قائم نگه دارید. در گونیا، ضلع اول را ثبت کنید و برای ضلع دوم، گوشی را در همان صفحه بچرخانید. چرخش روی میز افقی با حسگر گرانش اندازه‌گیری نمی‌شود.",12,MUTED));
-    gap(root,12);root.addView(text("تراز یار • نسخهٔ ۲٫۱ • تراز + شیب‌سنج + زاویه‌سنج + گونیا",11,GOLD));
+    gap(root,12);root.addView(text("تراز یار • نسخهٔ ۲٫۲ • چهار ابزار مستقل و انتخاب واضح",11,GOLD));
   }
   void startMeasure() {
     if(sensor==null)return;
@@ -203,12 +229,13 @@ public class MainActivity extends Activity implements SensorEventListener {
     status.setText("در حال خواندن حسگر...");start.setText("■ توقف سنجش");calibrate.setEnabled(false);
     getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
     if(resumed)manager.registerListener(this,sensor,SensorManager.SENSOR_DELAY_UI);
+    refreshMeasureUI();
   }
   void stopMeasure() {
     measuring=false;observed=false;state=-1;candidate=-1;
     if(manager!=null)manager.unregisterListener(this);
     getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-    start.setText("▶ شروع سنجش");calibrate.setEnabled(false);status.setText("سنجش متوقف شد");angles.setText("X: --.-°       Y: --.-°");drawing.setTilt(0,0,false);resultValue.setText("—");stopVoice();
+    start.setText("▶ شروع سنجش");calibrate.setEnabled(false);status.setText("سنجش متوقف شد");angles.setText("X: --.-°       Y: --.-°");drawing.setTilt(0,0,false);resultValue.setText("—");stopVoice();refreshMeasureUI();
   }
   // Calibrated axes: with the display facing up, positive gravity X means
   // the phone's right edge is lower and should be raised; positive Y means
@@ -231,9 +258,36 @@ public class MainActivity extends Activity implements SensorEventListener {
     try{vibrator.vibrate(VibrationEffect.createWaveform(new long[]{0,45,80,75},-1));}
     catch(Exception ignored){}
   }
+  void selectMode(int mode){
+    if(mode<0||mode>3)return;
+    if(measurementMode!=mode){
+      measurementMode=mode;
+      prefs.edit().putInt("measurementMode",mode).apply();
+      stopVoice();state=-1;candidate=-1;candidateAt=0;
+      previousAnnouncementDistance=Double.NaN;
+      // A reference from another visit is invalid; each square session captures its own.
+      if(mode==3)referenceAngle=Double.NaN;
+    }
+    if(sensor!=null&&!measuring)startMeasure();
+    updateModeUI();
+    Toast.makeText(this,new String[]{"تراز حبابی","شیب‌سنج فعال شد","زاویه‌سنج فعال شد","گونیا فعال شد"}[mode],Toast.LENGTH_SHORT).show();
+  }
   void updateModeUI(){
     if(drawing==null||meter==null||captureReference==null)return;
     boolean bubble=(measurementMode==0);
+    String[] hints={
+      "سطح را زیر گوشی بگذارید؛ حباب باید وسط باشد.",
+      "گوشی را روی سطح قرار دهید؛ زاویه و درصد شیب زنده نمایش داده می‌شود.",
+      "گوشی را قائم نگه دارید؛ زاویهٔ لبهٔ آن نسبت به افق نمایش داده می‌شود.",
+      "در یک صفحهٔ عمودی: ضلع اول را ثبت کنید، سپس روی ضلع دوم قرار دهید."
+    };
+    if(modeHint!=null)modeHint.setText(hints[measurementMode]);
+    for(int i=0;i<toolButtons.length;i++){
+      if(toolButtons[i]==null)continue;
+      boolean selected=(i==measurementMode);
+      toolButtons[i].setTextColor(selected?BG:TEXT);
+      toolButtons[i].setBackground(background(selected?GREEN:0xff234331,selected?GOLD:0xff53765D,14));
+    }
     drawing.setVisibility(bubble?View.VISIBLE:View.GONE);
     meter.setVisibility(bubble?View.GONE:View.VISIBLE);
     resultValue.setVisibility(bubble?View.GONE:View.VISIBLE);
@@ -241,6 +295,14 @@ public class MainActivity extends Activity implements SensorEventListener {
     captureReference.setVisibility(measurementMode==3?View.VISIBLE:View.GONE);
     if(calibrate!=null)calibrate.setEnabled(measuring&&observed&&bubble);
     if(meter!=null){meter.setMode(measurementMode);meter.setReading(0,0,false);}
+    if(!bubble) {
+      angles.setVisibility(View.GONE);
+      directions.setVisibility(View.GONE);
+    } else {
+      angles.setVisibility(View.VISIBLE);
+      directions.setVisibility(View.VISIBLE);
+      status.setText(measuring?"◉ تراز حبابی فعال":"◉ تراز حبابی آماده");
+    }
     refreshMeasureUI();
   }
   double angleDifference180(double a,double b){
@@ -257,7 +319,7 @@ public class MainActivity extends Activity implements SensorEventListener {
     }
     if(measurementMode==1){
       resultValue.setText(String.format(Locale.US,"%.1f°",tiltDegrees));
-      resultDescription.setText(slopePercent>9999?"شیب نزدیک به عمودی؛ درصد شیب بسیار زیاد است":String.format(Locale.US,"شیب سطح: %.1f درصد | صفر درجه = افقی",slopePercent));
+      resultDescription.setText(slopePercent>9999?"شیب نزدیک به عمودی؛ درصد شیب بسیار زیاد است":String.format(Locale.US,"شیب: %.1f درصد | صفر درجه = افقی",slopePercent));
       meter.setReading(tiltDegrees,0,true);
       status.setText("◡  شیب‌سنج");
     }else if(measurementMode==2){
@@ -541,7 +603,7 @@ public class MainActivity extends Activity implements SensorEventListener {
         c.drawLine(x1,y1,x2,y2,p);
         if(i%3==0){
           p.setColor(0xffC3D5BD);p.setTextSize(13*getResources().getDisplayMetrics().scaledDensity);
-          c.drawText(String.valueOf(mode==1?i*5:i*10),cx+co*(r-53),cy+si*(r-53)+5,p);
+          c.drawText(String.valueOf(mode==2?i*10:i*5),cx+co*(r-53),cy+si*(r-53)+5,p);
         }
       }
       float dialMax=mode==1?90:180;
