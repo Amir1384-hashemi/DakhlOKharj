@@ -32,6 +32,15 @@ jobs:
           test -s "$BUILD_DIR/pubspec.yaml"
           test -s "$BUILD_DIR/assets/branding/omran_yar_icon.png"
           echo "Flutter source recovered."
+      - name: Apply truss analysis overlay
+        shell: bash
+        run: |
+          set -euo pipefail
+          base64 -d ci/omranyar-beta/truss_patch.tar.xz.b64 | tar -xJ -C "$BUILD_DIR"
+          test -s "$BUILD_DIR/lib/core/truss_engine.dart"
+          test -s "$BUILD_DIR/lib/pages/truss_page.dart"
+          test -s "$BUILD_DIR/test/truss_test.dart"
+          echo "2D truss source integrated."
       - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
