@@ -10,6 +10,7 @@ import android.hardware.SensorManager;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.media.MediaPlayer;
+import android.media.PlaybackParams;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.graphics.*;
@@ -24,9 +25,26 @@ public class MainActivity extends Activity implements SensorEventListener {
   boolean speaking=false, measuring=false, resumed=false, voice=true, observed=false, lowpassInit=false;
   double previousAnnouncementDistance=Double.NaN;
   int nearIdx=0, farIdx=0, successIdx=0;
-  final int[] nearAudio={R.raw.near_1,R.raw.near_2,R.raw.near_3,R.raw.near_4};
-  final int[] farAudio={R.raw.far_1,R.raw.far_2,R.raw.far_3,R.raw.far_4};
-  final int[] successAudio={R.raw.success_1,R.raw.success_2};
+
+  // Four selectable original voice profiles. None imitates a specific performer.
+  final int[][] nearAudio = {
+    {R.raw.kid_near_1,R.raw.kid_near_2},
+    {R.raw.girl_near_1,R.raw.girl_near_2},
+    {R.raw.woman_near_1,R.raw.woman_near_2},
+    {R.raw.cinema_near_1,R.raw.cinema_near_2}
+  };
+  final int[][] farAudio = {
+    {R.raw.kid_far_1,R.raw.kid_far_2},
+    {R.raw.girl_far_1,R.raw.girl_far_2},
+    {R.raw.woman_far_1,R.raw.woman_far_2},
+    {R.raw.cinema_far_1,R.raw.cinema_far_2}
+  };
+  final int[][] successAudio = {
+    {R.raw.kid_ok_1},{R.raw.girl_ok_1},{R.raw.woman_ok_1},{R.raw.cinema_ok_1}
+  };
+  final float[] voicePitch={1.25f,1.09f,1.0f,0.90f};
+  final float[] voiceSpeed={1.06f,1.04f,1.0f,0.96f};
+  int voiceProfile=0;
   final float[] gv=new float[3];
   double zeroX=0,zeroY=0,rawX=0,rawY=0,x=0,y=0,tolerance=.5;
   int state=-1, candidate=-1, interval=5000;
@@ -42,7 +60,7 @@ public class MainActivity extends Activity implements SensorEventListener {
   @Override public void onCreate(Bundle b) {
     super.onCreate(b); getWindow().setStatusBarColor(BG);getWindow().setNavigationBarColor(BG);
     prefs=getSharedPreferences("trazyar",MODE_PRIVATE);
-    tolerance=prefs.getFloat("tol",.5f);voice=prefs.getBoolean("voice",true);interval=prefs.getInt("repeat",5000);
+    tolerance=prefs.getFloat("tol",.5f);voice=prefs.getBoolean("voice",true);interval=prefs.getInt("repeat",5000);voiceProfile=Math.max(0,Math.min(3,prefs.getInt("voiceProfile",0)));
     manager=(SensorManager)getSystemService(Context.SENSOR_SERVICE);
     if(manager!=null){sensor=manager.getDefaultSensor(Sensor.TYPE_GRAVITY);if(sensor==null)sensor=manager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);}
     buildUI();
@@ -76,6 +94,26 @@ public class MainActivity extends Activity implements SensorEventListener {
     TextView voiceTitle=text("🎙️ گویندهٔ طنز و تشویقی فارسی",19,TEXT);opt.addView(voiceTitle);gap(opt,10);
     Switch voiceToggle=new Switch(this);voiceToggle.setText("گویندهٔ بامزه روشن باشد");voiceToggle.setTextSize(15);voiceToggle.setTextColor(TEXT);voiceToggle.setChecked(voice);opt.addView(voiceToggle);
     voiceToggle.setOnCheckedChangeListener((sw,on)->{voice=on;prefs.edit().putBoolean("voice",on).apply();if(!on)stopVoice();});
+    gap(opt,8);
+    TextView voiceSelectTitle=text("شخصیت گوینده (فارسی معیار)",15,GOLD);opt.addView(voiceSelectTitle);
+    Spinner voices=new Spinner(this);
+    String[] voiceNames={"بچهٔ شیطون و پرانرژی","دختر شیطون و بازیگوش","خانم شوخ‌طبع","مرد سینمایی با صدای بم"};
+    ArrayAdapter<String> voiceAdapter=new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,voiceNames);
+    voices.setAdapter(voiceAdapter);
+    voices.setSelection(voiceProfile);opt.addView(voices);
+    voices.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){
+      public void onItemSelected(android.widget.AdapterView<?> parent,View item,int pos,long id){
+        int profile=Math.max(0,Math.min(3,pos));
+        if(profile!=voiceProfile){
+          stopVoice();voiceProfile=profile;nearIdx=0;farIdx=0;successIdx=0;
+          previousAnnouncementDistance=Double.NaN;
+          prefs.edit().putInt("voiceProfile",profile).apply();
+        }
+      }
+      public void onNothingSelected(android.widget.AdapterView<?> parent){}
+    });
+    opt.addView(text("لحن‌ها شخصیت‌پردازی‌شده‌اند؛ صدای مرد سینمایی شبیه‌سازی شخص واقعی نیست.",12,MUTED));
+
     TextView intervalLabel=text("فاصلهٔ تکرار جمله‌های طنز",14,MUTED);opt.addView(intervalLabel);
     Spinner options=new Spinner(this);
     String[] repeats={"هر ۳ ثانیه","هر ۵ ثانیه","هر ۸ ثانیه","هر ۱۲ ثانیه"};
@@ -88,11 +126,11 @@ public class MainActivity extends Activity implements SensorEventListener {
     });
     
     Button testFar=button("😂 آزمایش شوخی وقتی دور است",false);opt.addView(testFar,new LinearLayout.LayoutParams(-1,px(48)));
-    testFar.setOnClickListener(v->playClip(farAudio[(farIdx++)%farAudio.length],true));
+    testFar.setOnClickListener(v->playClip(farAudio[voiceProfile][(farIdx++)%farAudio[voiceProfile].length],true));
     Button testNear=button("👏 آزمایش تشویق وقتی نزدیک است",false);opt.addView(testNear,new LinearLayout.LayoutParams(-1,px(48)));
-    testNear.setOnClickListener(v->playClip(nearAudio[(nearIdx++)%nearAudio.length],true));
+    testNear.setOnClickListener(v->playClip(nearAudio[voiceProfile][(nearIdx++)%nearAudio[voiceProfile].length],true));
     Button testOk=button("🎉 آزمایش جشن تراز شدن",false);opt.addView(testOk,new LinearLayout.LayoutParams(-1,px(48)));
-    testOk.setOnClickListener(v->playClip(successAudio[(successIdx++)%successAudio.length],true));
+    testOk.setOnClickListener(v->playClip(successAudio[voiceProfile][(successIdx++)%successAudio[voiceProfile].length],true));
     opt.addView(text("صداها از قبل داخل برنامه‌اند و بدون اینترنت یا زبان فارسی گوشی پخش می‌شوند.",12,GOLD));
     gap(root,14);
     LinearLayout settings=new LinearLayout(this);settings.setOrientation(1);settings.setPadding(px(16),px(13),px(16),px(14));settings.setBackground(background(PANEL,0xff3A6849,20));root.addView(settings);
@@ -104,7 +142,7 @@ public class MainActivity extends Activity implements SensorEventListener {
       public void onStartTrackingTouch(SeekBar bar){} public void onStopTrackingTouch(SeekBar bar){}
     });
     gap(root,12);root.addView(text("برای کالیبراسیون از سطح مرجع واقعاً تراز استفاده کنید. دقت به حسگر گوشی وابسته است.",12,MUTED));
-    gap(root,12);root.addView(text("تراز یار • نسخهٔ ۱٫۴ • سخنگوی طنز آفلاین",11,GOLD));
+    gap(root,12);root.addView(text("تراز یار • نسخهٔ ۱٫۵ • چهار گویندهٔ طنز آفلاین",11,GOLD));
   }
   void startMeasure() {
     if(sensor==null)return;
@@ -150,7 +188,7 @@ public class MainActivity extends Activity implements SensorEventListener {
     if(!voice || !resumed || !observed)return;
     if(state==1){
       previousAnnouncementDistance=0;
-      playClip(successAudio[(successIdx++)%successAudio.length],false);
+      playClip(successAudio[voiceProfile][(successIdx++)%successAudio[voiceProfile].length],false);
       return;
     }
     if(state!=0)return;
@@ -160,9 +198,9 @@ public class MainActivity extends Activity implements SensorEventListener {
     boolean movingFarther=Double.isFinite(previousAnnouncementDistance) && distance>previousAnnouncementDistance+1.0;
     int id;
     if(movingFarther || (!movingCloser && distance>nearLimit)){
-      id=farAudio[(farIdx++)%farAudio.length];
+      id=farAudio[voiceProfile][(farIdx++)%farAudio[voiceProfile].length];
     }else{
-      id=nearAudio[(nearIdx++)%nearAudio.length];
+      id=nearAudio[voiceProfile][(nearIdx++)%nearAudio[voiceProfile].length];
     }
     previousAnnouncementDistance=distance;
     playClip(id,false);
@@ -177,6 +215,7 @@ public class MainActivity extends Activity implements SensorEventListener {
       next.setOnCompletionListener(mp->{if(player==mp){player=null;speaking=false;}mp.release();});
       next.setOnErrorListener((mp,what,extra)->{if(player==mp){player=null;speaking=false;}mp.release();return true;});
       next.start();
+      try{next.setPlaybackParams(new PlaybackParams().setSpeed(voiceSpeed[voiceProfile]).setPitch(voicePitch[voiceProfile]));}catch(Exception ignored){} 
     }catch(Exception e){speaking=false;player=null;Toast.makeText(this,"پخش صدای طنز ممکن نشد",Toast.LENGTH_SHORT).show();}
   }
   void stopVoice(){
