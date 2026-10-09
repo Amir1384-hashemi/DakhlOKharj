@@ -22,7 +22,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
-      - name: Embed four offline Persian voice profiles
+      - name: Embed 40 offline Persian humorous voice prompts
         run: |
           mkdir -p TrazYarInstaller/app/src/main/res/raw
           curl -fLsS --retry 3 --retry-delay 2 --max-time 90 'https://storage.googleapis.com/adm--audio-playback--7d--public/mcp-preview/6cf19425-fe9d-423c-90d6-e297f51a472a.mp3' -o 'TrazYarInstaller/app/src/main/res/raw/kid_near_1.mp3'
@@ -65,16 +65,56 @@ jobs:
           test "$(wc -c < 'TrazYarInstaller/app/src/main/res/raw/cinema_far_2.mp3')" -gt 4000
           curl -fLsS --retry 3 --retry-delay 2 --max-time 90 'https://storage.googleapis.com/adm--audio-playback--7d--public/mcp-preview/02927519-ed67-4559-9d07-f649c8ee44b4.mp3' -o 'TrazYarInstaller/app/src/main/res/raw/cinema_ok_1.mp3'
           test "$(wc -c < 'TrazYarInstaller/app/src/main/res/raw/cinema_ok_1.mp3')" -gt 4000
+          curl -fLsS --retry 3 --retry-delay 2 --max-time 90 'https://storage.googleapis.com/adm--audio-playback--7d--public/mcp-preview/98840419-b7d1-495f-b99f-8846491a510b.mp3' -o 'TrazYarInstaller/app/src/main/res/raw/kid_right.mp3'
+          test "$(wc -c < 'TrazYarInstaller/app/src/main/res/raw/kid_right.mp3')" -gt 4000
+          curl -fLsS --retry 3 --retry-delay 2 --max-time 90 'https://storage.googleapis.com/adm--audio-playback--7d--public/mcp-preview/3c0218db-7d95-44d0-959c-c367b89f2f01.mp3' -o 'TrazYarInstaller/app/src/main/res/raw/kid_left.mp3'
+          test "$(wc -c < 'TrazYarInstaller/app/src/main/res/raw/kid_left.mp3')" -gt 4000
+          curl -fLsS --retry 3 --retry-delay 2 --max-time 90 'https://storage.googleapis.com/adm--audio-playback--7d--public/mcp-preview/a95c09ef-b395-4316-80b4-18dd36f18405.mp3' -o 'TrazYarInstaller/app/src/main/res/raw/kid_top.mp3'
+          test "$(wc -c < 'TrazYarInstaller/app/src/main/res/raw/kid_top.mp3')" -gt 4000
+          curl -fLsS --retry 3 --retry-delay 2 --max-time 90 'https://storage.googleapis.com/adm--audio-playback--7d--public/mcp-preview/adbe4b24-ccc6-4658-bb1a-8865a2a3e17e.mp3' -o 'TrazYarInstaller/app/src/main/res/raw/kid_bottom.mp3'
+          test "$(wc -c < 'TrazYarInstaller/app/src/main/res/raw/kid_bottom.mp3')" -gt 4000
+          curl -fLsS --retry 3 --retry-delay 2 --max-time 90 'https://storage.googleapis.com/adm--audio-playback--7d--public/mcp-preview/fb8f5dde-7930-49ea-bfcc-0521fa8afd3e.mp3' -o 'TrazYarInstaller/app/src/main/res/raw/girl_right.mp3'
+          test "$(wc -c < 'TrazYarInstaller/app/src/main/res/raw/girl_right.mp3')" -gt 4000
+          curl -fLsS --retry 3 --retry-delay 2 --max-time 90 'https://storage.googleapis.com/adm--audio-playback--7d--public/mcp-preview/91ee0c30-3769-4ab1-a7c0-f8ba1cf6aa5e.mp3' -o 'TrazYarInstaller/app/src/main/res/raw/girl_left.mp3'
+          test "$(wc -c < 'TrazYarInstaller/app/src/main/res/raw/girl_left.mp3')" -gt 4000
+          curl -fLsS --retry 3 --retry-delay 2 --max-time 90 'https://storage.googleapis.com/adm--audio-playback--7d--public/mcp-preview/703b3ea7-90ee-4e9f-9068-1e949ead12f4.mp3' -o 'TrazYarInstaller/app/src/main/res/raw/girl_top.mp3'
+          test "$(wc -c < 'TrazYarInstaller/app/src/main/res/raw/girl_top.mp3')" -gt 4000
+          curl -fLsS --retry 3 --retry-delay 2 --max-time 90 'https://storage.googleapis.com/adm--audio-playback--7d--public/mcp-preview/7316c045-0f9b-42f3-8d0f-24a40bdf0346.mp3' -o 'TrazYarInstaller/app/src/main/res/raw/girl_bottom.mp3'
+          test "$(wc -c < 'TrazYarInstaller/app/src/main/res/raw/girl_bottom.mp3')" -gt 4000
+          curl -fLsS --retry 3 --retry-delay 2 --max-time 90 'https://storage.googleapis.com/adm--audio-playback--7d--public/mcp-preview/6a16f84e-cd1c-4de2-9875-ae397f2b10c9.mp3' -o 'TrazYarInstaller/app/src/main/res/raw/woman_right.mp3'
+          test "$(wc -c < 'TrazYarInstaller/app/src/main/res/raw/woman_right.mp3')" -gt 4000
+          curl -fLsS --retry 3 --retry-delay 2 --max-time 90 'https://storage.googleapis.com/adm--audio-playback--7d--public/mcp-preview/e6de9150-4e6b-475c-b32d-d2a9223e0f57.mp3' -o 'TrazYarInstaller/app/src/main/res/raw/woman_left.mp3'
+          test "$(wc -c < 'TrazYarInstaller/app/src/main/res/raw/woman_left.mp3')" -gt 4000
+          curl -fLsS --retry 3 --retry-delay 2 --max-time 90 'https://storage.googleapis.com/adm--audio-playback--7d--public/mcp-preview/d413b6bc-907d-4aa8-b09e-11c9298a2c21.mp3' -o 'TrazYarInstaller/app/src/main/res/raw/woman_top.mp3'
+          test "$(wc -c < 'TrazYarInstaller/app/src/main/res/raw/woman_top.mp3')" -gt 4000
+          curl -fLsS --retry 3 --retry-delay 2 --max-time 90 'https://storage.googleapis.com/adm--audio-playback--7d--public/mcp-preview/6cb2ab3e-314b-440d-b69a-955e0a82156f.mp3' -o 'TrazYarInstaller/app/src/main/res/raw/woman_bottom.mp3'
+          test "$(wc -c < 'TrazYarInstaller/app/src/main/res/raw/woman_bottom.mp3')" -gt 4000
+          curl -fLsS --retry 3 --retry-delay 2 --max-time 90 'https://storage.googleapis.com/adm--audio-playback--7d--public/mcp-preview/885e70ef-6a3b-4f8f-9cb8-e8e3bc43a50e.mp3' -o 'TrazYarInstaller/app/src/main/res/raw/cinema_right.mp3'
+          test "$(wc -c < 'TrazYarInstaller/app/src/main/res/raw/cinema_right.mp3')" -gt 4000
+          curl -fLsS --retry 3 --retry-delay 2 --max-time 90 'https://storage.googleapis.com/adm--audio-playback--7d--public/mcp-preview/bd8ca950-97f5-41fc-9ecc-dc8b82e2eb74.mp3' -o 'TrazYarInstaller/app/src/main/res/raw/cinema_left.mp3'
+          test "$(wc -c < 'TrazYarInstaller/app/src/main/res/raw/cinema_left.mp3')" -gt 4000
+          curl -fLsS --retry 3 --retry-delay 2 --max-time 90 'https://storage.googleapis.com/adm--audio-playback--7d--public/mcp-preview/e9bda8a3-ea68-4d08-97a2-4ddc409eaf80.mp3' -o 'TrazYarInstaller/app/src/main/res/raw/cinema_top.mp3'
+          test "$(wc -c < 'TrazYarInstaller/app/src/main/res/raw/cinema_top.mp3')" -gt 4000
+          curl -fLsS --retry 3 --retry-delay 2 --max-time 90 'https://storage.googleapis.com/adm--audio-playback--7d--public/mcp-preview/6e064197-c1aa-4704-9dba-968d65c03bb3.mp3' -o 'TrazYarInstaller/app/src/main/res/raw/cinema_bottom.mp3'
+          test "$(wc -c < 'TrazYarInstaller/app/src/main/res/raw/cinema_bottom.mp3')" -gt 4000
+          curl -fLsS --retry 3 --retry-delay 2 --max-time 90 'https://storage.googleapis.com/adm--audio-playback--7d--public/mcp-preview/cabfa7b1-329e-4d1f-ac8b-3da942cc28f4.mp3' -o 'TrazYarInstaller/app/src/main/res/raw/kid_win2.mp3'
+          test "$(wc -c < 'TrazYarInstaller/app/src/main/res/raw/kid_win2.mp3')" -gt 4000
+          curl -fLsS --retry 3 --retry-delay 2 --max-time 90 'https://storage.googleapis.com/adm--audio-playback--7d--public/mcp-preview/e74218cb-137f-45a4-a1d7-945edaace9af.mp3' -o 'TrazYarInstaller/app/src/main/res/raw/girl_win2.mp3'
+          test "$(wc -c < 'TrazYarInstaller/app/src/main/res/raw/girl_win2.mp3')" -gt 4000
+          curl -fLsS --retry 3 --retry-delay 2 --max-time 90 'https://storage.googleapis.com/adm--audio-playback--7d--public/mcp-preview/da80fb7a-039e-4b08-af0b-96d3d6903802.mp3' -o 'TrazYarInstaller/app/src/main/res/raw/woman_win2.mp3'
+          test "$(wc -c < 'TrazYarInstaller/app/src/main/res/raw/woman_win2.mp3')" -gt 4000
+          curl -fLsS --retry 3 --retry-delay 2 --max-time 90 'https://storage.googleapis.com/adm--audio-playback--7d--public/mcp-preview/b22c3619-34a4-430f-9016-a82d981625f3.mp3' -o 'TrazYarInstaller/app/src/main/res/raw/cinema_win2.mp3'
+          test "$(wc -c < 'TrazYarInstaller/app/src/main/res/raw/cinema_win2.mp3')" -gt 4000
           file TrazYarInstaller/app/src/main/res/raw/*.mp3
       - name: Build Android APK
         working-directory: TrazYarInstaller
         run: gradle --no-daemon :app:assembleDebug
       - name: Publish downloadable APK on isolated branch
         run: |
-          cp TrazYarInstaller/app/build/outputs/apk/debug/app-debug.apk TrazYar_Samsung_4Voices_v1_5.apk
-          test -s TrazYar_Samsung_4Voices_v1_5.apk
+          cp TrazYarInstaller/app/build/outputs/apk/debug/app-debug.apk TrazYar_Samsung_v2_0_Smart.apk
+          test -s TrazYar_Samsung_v2_0_Smart.apk
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -f TrazYar_Samsung_4Voices_v1_5.apk
-          git commit -m "Publish installable TrazYar 1.5 four offline voice profiles APK [skip ci]"
+          git add -f TrazYar_Samsung_v2_0_Smart.apk
+          git commit -m "Publish installable TrazYar 2.0 guided haptics and glass-level APK [skip ci]"
           git push origin HEAD:trazyar-direct-install
