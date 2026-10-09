@@ -178,7 +178,6 @@ public class MainActivity extends Activity implements SensorEventListener {
       haptic=on;prefs.edit().putBoolean("haptic",on).apply();
     });
     gap(root,14);
-    LinearLayout settings=    gap(root,14);
     LinearLayout settings=new LinearLayout(this);settings.setOrientation(1);settings.setPadding(px(16),px(13),px(16),px(14));settings.setBackground(background(PANEL,0xff3A6849,20));root.addView(settings);
     TextView sens=text(String.format(Locale.US,"حساسیت: ±%.1f°",tolerance),17,GREEN);settings.addView(sens);
     SeekBar seek=new SeekBar(this);seek.setMax(18);seek.setProgress((int)Math.round((tolerance-.2)*10));settings.addView(seek);
