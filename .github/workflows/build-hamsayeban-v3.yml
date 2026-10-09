@@ -2,7 +2,7 @@ name: Build Hamsayeban v3 functional multi-language Android
 on:
   push:
     branches: [hamsayeban-apk-test]
-    paths: ["hamsayeban-android/app/src/main/assets/index.html", ".github/workflows/build-hamsayeban-v3.yml"]
+    paths: ["hamsayeban-android/app/src/main/assets/**", "hamsayeban-android/app/src/main/res/**", "hamsayeban-android/app/src/main/AndroidManifest.xml", "hamsayeban-android/app/src/main/java/**", ".github/workflows/build-hamsayeban-v3.yml"]
   workflow_dispatch:
 permissions:
   contents: write
