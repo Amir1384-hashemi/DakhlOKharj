@@ -40,6 +40,12 @@ html[dir="ltr"] .hb-right-settings{margin-left:auto;margin-right:0;direction:ltr
 .topbar{position:relative;padding-right:54px}
 .hb-header-settings{position:absolute;right:0;top:0;order:initial}
 @media(max-width:800px){.hb-right-settings{width:100%;margin:0}}
+.hb-right-settings{display:flex!important;flex-direction:column!important;align-items:stretch!important;max-width:650px;width:100%;margin-left:auto!important;margin-right:0!important;float:right;clear:both;text-align:right!important}
+.hb-right-settings .v2-theme-grid{display:flex!important;flex-direction:column!important;gap:10px!important}
+.hb-right-settings .v2-row{display:flex;flex-direction:row;justify-content:space-between;text-align:right!important}
+.hb-header-settings{position:absolute!important;top:0!important;right:0!important;z-index:5;min-width:46px;min-height:46px}
+html[dir="ltr"] .hb-right-settings{direction:rtl!important;text-align:right!important}
+@media(max-width:800px){.hb-right-settings{max-width:100%;float:none}}
 </style>
 <script src="localization.js"></script>
 </head>
@@ -382,7 +388,7 @@ document.addEventListener('click',async e=>{const el=e.target.closest('[data-act
  case 'j-close':document.getElementById('v2-jalali-picker')?.remove();break;
  case 'j-day':if(activeJalaliInput){activeJalaliInput.value=persianDate(el.dataset.date);activeJalaliInput.dispatchEvent(new Event('change',{bubbles:true}));}document.getElementById('v2-jalali-picker')?.remove();break;
  case 'theme-select':prefs.theme=el.dataset.value;savePrefs();render();break;
- case 'language-select':prefs.language=el.dataset.value;savePrefs();render();break;
+ case 'language-select':prefs.language=el.dataset.value;savePrefs();render();if(typeof window.HB_LOCALIZE==='function')window.HB_LOCALIZE(prefs.language);break;
  case 'open-guide':showGuide();break;
  case 'biometric-toggle':{if(prefs.fingerprint){prefs.fingerprint=false;savePrefs();render();toast('ورود با اثر انگشت غیرفعال شد.');break;}if(!prefs.pinHash)throw Error('ابتدا رمز ورود ۴ تا ۸ رقمی تنظیم کنید.');if(!window.HamsayebanBridge?.hasBiometric?.())throw Error('حسگر اثر انگشت ثبت‌شده یا اندروید ۹ به بالا در دسترس نیست.');biometricEnrollPending=true;window.HamsayebanBridge.authenticateBiometric(prefs.language);break;}
  case 'biometric-login':if(window.HamsayebanBridge?.hasBiometric?.())window.HamsayebanBridge.authenticateBiometric(prefs.language);else throw Error('اثر انگشت روی این دستگاه در دسترس نیست.');break;
