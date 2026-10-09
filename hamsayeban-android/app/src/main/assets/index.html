@@ -31,7 +31,7 @@
 </style>
 <style id="hb-right-style">
 .hb-header-settings{min-width:44px;min-height:42px;display:inline-flex;justify-content:center;align-items:center;order:-10}
-.hb-right-settings{width:min(640px,100%);margin:0 auto 0 0;direction:rtl;text-align:right;align-items:stretch}
+.hb-right-settings{width:min(640px,100%);margin:0 0 0 auto;direction:rtl;text-align:right;align-items:stretch}
 .hb-right-settings .card{width:100%}
 .hb-right-settings .v2-row,.hb-right-settings h3,.hb-right-settings p,.hb-right-settings label{text-align:right}
 .hb-right-settings .v2-theme-grid{display:grid;grid-template-columns:1fr;gap:9px}
@@ -195,7 +195,7 @@ function render(){
  if(ui.role==='resident' && !residentPages.has(ui.page))ui.page='home';
  const selectedTitle={home:'خانه',units:ui.role==='manager'?'مدیریت واحدها':'حساب واحد من',finance:ui.role==='manager'?'امور مالی':'پرداخت شارژ',social:'ارتباطات',reports:'گزارش‌ها',settings:'تنظیمات'}[ui.page];
  document.documentElement.lang=prefs.language;document.documentElement.dir=(prefs.language==='en'||prefs.language==='tr')?'ltr':'rtl';document.getElementById('app').innerHTML=`<div class="shell">
-   <aside class="sidebar"><div class="brand"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA4MCA4MCI+CiA8ZGVmcz48bGluZWFyR3JhZGllbnQgaWQ9ImIiIHgxPSIwIiB5MT0iMCIgeDI9IjEiIHkyPSIxIj48c3RvcCBzdG9wLWNvbG9yPSIjMTA4OWM0Ii8+PHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjMGY0NzdmIi8+PC9saW5lYXJHcmFkaWVudD48L2RlZnM+CiA8cmVjdCB3aWR0aD0iODAiIGhlaWdodD0iODAiIHJ4PSIyMSIgZmlsbD0iI2YyZjlmZiIvPgogPHBhdGggZD0iTTE0IDYwVjMxTDMzIDE1bDE5IDE2djI5SDE0WiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJ1cmwoI2IpIiBzdHJva2Utd2lkdGg9IjUuNSIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPgogPHBhdGggZD0iTTIzIDMzaDd2N2gtN3ptMTMgMGg3djdoLTd6TTIzIDQ1aDd2N2gtN3oiIGZpbGw9IiMwYjc2YjYiLz4KIDxyZWN0IHg9IjQyIiB5PSIzOCIgd2lkdGg9IjI5IiBoZWlnaHQ9IjI4IiByeD0iMTEiIGZpbGw9IiMxMmE0N2IiIHN0cm9rZT0iI2ZmZiIgc3Ryb2tlLXdpZHRoPSIzIi8+CiA8cGF0aCBkPSJtNDkgNTEgNiA2IDEwLTEyIiBmaWxsPSJub25lIiBzdHJva2U9IndoaXRlIiBzdHJva2Utd2lkdGg9IjQiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPgo8L3N2Zz4K" alt="نشان همسایه‌بان"><div><strong>همسایه‌بان</strong><small>مدیریت ساده ساختمان</small></div></div><nav class="nav">${nav.map(n=>`<button class="${ui.page===n[0]?'active':''}" data-action="nav" data-page="${n[0]}"><span class="ico">${n[1]}</span>${n[2]}</button>`).join('')}</nav><div class="side-foot">🌿 کارها باید ساده باشند.<br>شارژ، پرداخت و درخواست‌ها در چند قدم کوتاه.</div></aside>
+   <aside class="sidebar"><div class="brand"><img src="logo.svg" alt="نشان همسایه‌بان"><div><strong>همسایه‌بان</strong><small>مدیریت ساده ساختمان</small></div></div><nav class="nav">${nav.map(n=>`<button class="${ui.page===n[0]?'active':''}" data-action="nav" data-page="${n[0]}"><span class="ico">${n[1]}</span>${n[2]}</button>`).join('')}</nav><div class="side-foot">🌿 کارها باید ساده باشند.<br>شارژ، پرداخت و درخواست‌ها در چند قدم کوتاه.</div></aside>
    <main class="workspace"><header class="topbar"><div class="right"><button class="hb-header-settings btn tiny" data-action="nav" data-page="settings" aria-label="تنظیمات">⚙️</button><h1>${selectedTitle}</h1><span class="muted">${esc(b().name)}</span></div><div class="header-actions">
    <select class="select-building" id="building-switch" aria-label="انتخاب ساختمان">${state.buildings.map(x=>`<option value="${esc(x.id)}" ${x.id===b().id?'selected':''}>${esc(x.name)}</option>`).join('')}</select>
    <button class="btn tiny" data-action="new-building" title="ساختمان جدید">＋ ساختمان</button>
