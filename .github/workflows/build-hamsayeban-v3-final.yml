@@ -1,0 +1,74 @@
+name: Build final Hamsayeban v3 multilingual Android
+on:
+  push:
+    branches: [hamsayeban-apk-test]
+    paths: ["hamsayeban-android/app/src/main/assets/**", "hamsayeban-android/app/src/main/res/**", "hamsayeban-android/app/src/main/AndroidManifest.xml", "hamsayeban-android/app/src/main/java/**", ".github/workflows/build-hamsayeban-v3-final.yml"]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Validate app and JavaScript
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          html=Path('hamsayeban-android/app/src/main/assets/index.html').read_text()
+          for item in ['function collectionPanel','function settlementPanel','function renderSettings','function showTicketDetail','function shareExpense','resident-payment-form','HB_LOCALIZE']:
+              assert item in html, item
+          scripts=[x for x in re.findall(r'<script[^>]*>(.*?)</script>',html,re.S) if x.strip()]
+          assert len(scripts)==2
+          for i,s in enumerate(scripts):
+              Path('/tmp/hb'+str(i)+'.js').write_text(s)
+          print('HTML code validated',len(html))
+          PY
+          node --check /tmp/hb0.js
+          node --check /tmp/hb1.js
+          node --check hamsayeban-android/app/src/main/assets/localization.js
+      - name: Compile and sign v2 APK
+        run: |
+          set -euo pipefail
+          A="$ANDROID_HOME/platforms/android-35/android.jar"
+          B="$ANDROID_HOME/build-tools/35.0.0"
+          mkdir -p /tmp/hb/classes /tmp/hb/dex downloads
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path('hamsayeban-android/app/src/main/AndroidManifest.xml').read_text()
+          s=s.replace('<manifest xmlns:android="http://schemas.android.com/apk/res/android">','<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="ir.hamsayeban.v3" android:versionCode="6" android:versionName="0.5.1">')
+          s=s.replace('android:name=".MainActivity"','android:name="ir.hamsayeban.app.MainActivity"')
+          s=s.replace('<application','<uses-sdk android:minSdkVersion="23" android:targetSdkVersion="35" /><application',1)
+          Path('/tmp/hb/AndroidManifest.xml').write_text(s)
+          PY
+          javac -encoding UTF-8 -source 8 -target 8 -cp "$A" -d /tmp/hb/classes hamsayeban-android/app/src/main/java/ir/hamsayeban/app/MainActivity.java
+          find /tmp/hb/classes -name '*.class' > /tmp/hb/classes-list
+          "$B/d8" --min-api 23 --lib "$A" --output /tmp/hb/dex $(cat /tmp/hb/classes-list)
+          "$B/aapt" package -f -M /tmp/hb/AndroidManifest.xml -A hamsayeban-android/app/src/main/assets -S hamsayeban-android/app/src/main/res -I "$A" -F /tmp/hb/unsigned.apk
+          cd /tmp/hb/dex
+          zip -q -j /tmp/hb/unsigned.apk classes.dex
+          cd -
+          "$B/zipalign" -f 4 /tmp/hb/unsigned.apk /tmp/hb/aligned.apk
+          keytool -genkeypair -noprompt -keystore /tmp/hb/test.jks -storepass android -keypass android -alias hamsayeban -keyalg RSA -keysize 2048 -validity 3650 -dname "CN=Hamsayeban Test, O=Independent"
+          "$B/apksigner" sign --ks /tmp/hb/test.jks --ks-pass pass:android --key-pass pass:android --ks-key-alias hamsayeban --out downloads/Hamsayeban-v3-final.apk /tmp/hb/aligned.apk
+          "$B/apksigner" verify --verbose downloads/Hamsayeban-v3-final.apk
+          "$B/aapt" dump badging downloads/Hamsayeban-v3-final.apk | head -n 6
+          unzip -l downloads/Hamsayeban-v3-final.apk | grep -E "localization.js|res/drawable|logo.svg"
+          unzip -p downloads/Hamsayeban-v3-final.apk assets/index.html | grep -q 'function settlementPanel'
+          test "$(stat -c%s downloads/Hamsayeban-v3-final.apk)" -gt 40000
+          sha256sum downloads/Hamsayeban-v3-final.apk
+      - name: Publish APK
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add downloads/Hamsayeban-v3-final.apk
+          git commit -m "Publish Hamsayeban v3 functional four-language beta"
+          git fetch origin hamsayeban-apk-test
+          git rebase origin/hamsayeban-apk-test
+          git push origin HEAD:hamsayeban-apk-test
