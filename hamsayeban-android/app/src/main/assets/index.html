@@ -306,10 +306,10 @@ document.addEventListener('change',e=>{
  if(e.target.classList.contains('ticket-status')){if(ui.role!=='manager')return;const t=b().tickets.find(x=>x.id===e.target.dataset.id);if(t){t.status=e.target.value;t.notes||=[];t.notes.push({date:today(),by:'مدیر',status:t.status,text:'وضعیت درخواست به «'+t.status+'» تغییر کرد.'});save();render();toast('وضعیت درخواست به‌روز شد.');}}
 });
 document.addEventListener('input',e=>{if(e.target.id==='unit-search'){ui.unitSearch=e.target.value;const pos=e.target.selectionStart;render();const input=document.getElementById('unit-search');input?.focus();input?.setSelectionRange(pos,pos);}});
-document.addEventListener('submit',async e=>{const form=e.target;if(!form.id)return;e.preventDefault();const v=n=>input(form,n);
+document.addEventListener('submit',async e=>{const form=e.target;if(!form.getAttribute('id'))return;e.preventDefault();const v=n=>input(form,n);
  try{
  if(ui.role==='resident'&&!['ticket-form','resident-payment-form'].includes(form.id))throw Error('ثبت اطلاعات مالی فقط توسط مدیر مجاز است.');
- switch(form.id){
+ switch(form.getAttribute('id')){
  case 'building-form':{const count=Number(v('count'));if(!Number.isInteger(count)||count<1||count>200)throw Error('تعداد واحد باید بین ۱ تا ۲۰۰ باشد.');const name=String(v('name')).trim();if(!name)throw Error('نام ساختمان را وارد کنید.');const id=uid(),units=Array.from({length:count},(_,i)=>({id:uid(),number:String(i+1),owner:'',occupant:'',phone:'',persons:0,area:80,floor:Math.floor(i/2)+1,occupancy:'vacant'}));state.buildings.push({id,name,capacity:count,settlements:[],units,ledger:[],cash:[],expenses:[],notices:[],tickets:[],polls:[],reminders:[],issuedPeriods:{},closedMonths:[],closedYears:[],settings:{issueDay:1,dueDay:20,defaultCharge:0}});state.activeBuildingId=id;ui.residentUnitId=units[0].id;break;}
  case 'units-bulk-form':throw Error('ظرفیت واحدها ثابت است.');/*{const count=Number(v('count'));if(!Number.isInteger(count)||count<1||b().units.length+count>200)throw Error('تعداد کل واحدها باید حداکثر ۲۰۰ باشد.');const existing=new Set(b().units.map(u=>u.number));let n=1,added=0;while(added<count){if(!existing.has(String(n))){b().units.push({id:uid(),number:String(n),owner:'',occupant:'',phone:'',persons:0,area:80,occupancy:'vacant'});added++;}n++;}break;}*/
  case 'unit-form':{let u=b().units.find(x=>x.id===v('id'));const number=String(v('number')).trim();if(!number)throw Error('شماره واحد ضروری است.');if(b().units.some(x=>x.number===number&&x.id!==u?.id))throw Error('این شماره واحد قبلاً ثبت شده است.');if(!u)throw Error('ساختمان دارای تعداد واحد ثابت است؛ فقط ویرایش واحدهای موجود مجاز است.');const occupancy=String(v('occupancy'));const updated={number,owner:String(v('owner')).trim(),occupant:occupancy==='vacant'?'':String(v('occupant')).trim(),phone:String(v('phone')).trim(),persons:occupancy==='vacant'?0:Number(v('persons')),area:Number(v('area')),floor:Number(v('floor')),occupancy};if(!Number.isFinite(updated.persons)||updated.persons<0||!Number.isFinite(updated.area)||updated.area<=0||!Number.isInteger(updated.floor)||updated.floor<0)throw Error('اطلاعات نفرات یا متراژ معتبر نیست.');Object.assign(u,updated);break;}
@@ -324,7 +324,7 @@ document.addEventListener('submit',async e=>{const form=e.target;if(!form.id)ret
  case 'poll-form':b().polls.push({id:uid(),title:String(v('title')).trim(),votes:{},date:today()});break;
  default:return;
  }
- ui.modal=null;ui.selectedUnitId=null;save();render();if(form.id!=='payment-form')toast('اطلاعات با موفقیت ثبت شد.');
+ ui.modal=null;ui.selectedUnitId=null;save();render();if(form.getAttribute('id')!=='payment-form')toast('اطلاعات با موفقیت ثبت شد.');
  }catch(err){toast(err.message||'ثبت اطلاعات ناموفق بود.');}
 });
 /* Hamsayeban v2: manager workflows, settings, guides, and follow-ups.
