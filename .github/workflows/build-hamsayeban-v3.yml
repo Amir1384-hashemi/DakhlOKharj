@@ -24,7 +24,7 @@ jobs:
           html=Path('hamsayeban-android/app/src/main/assets/index.html').read_text()
           for item in ['function collectionPanel','function settlementPanel','function renderSettings','function showTicketDetail','function shareExpense','resident-payment-form','HB_LOCALIZE']:
               assert item in html, item
-          scripts=re.findall(r'<script[^>]*>(.*?)</script>',html,re.S)
+          scripts=[x for x in re.findall(r'<script[^>]*>(.*?)</script>',html,re.S) if x.strip()]
           assert len(scripts)==2
           for i,s in enumerate(scripts):
               Path('/tmp/hb'+str(i)+'.js').write_text(s)
