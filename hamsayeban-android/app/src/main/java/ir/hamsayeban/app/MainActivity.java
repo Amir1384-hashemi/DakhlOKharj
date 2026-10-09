@@ -96,18 +96,22 @@ public class MainActivity extends Activity {
                 return fp != null && fp.isHardwareDetected() && fp.hasEnrolledFingerprints();
             } catch (Exception ex) { return false; }
         }
-        @JavascriptInterface public void authenticateBiometric() {
+        @JavascriptInterface public void authenticateBiometric(String locale) {
+            final String language = locale == null ? "fa" : locale;
+            final String subtitle = language.equals("en") ? "Confirm your fingerprint" : language.equals("tr") ? "Parmak izinizi doğrulayın" : language.equals("ar") ? "تأكيد الهوية بالبصمة" : "تأیید هویت با اثر انگشت";
+            final String cancel = language.equals("en") ? "Cancel" : language.equals("tr") ? "İptal" : language.equals("ar") ? "إلغاء" : "انصراف";
+            final String error = language.equals("en") ? "Fingerprint verification unavailable" : language.equals("tr") ? "Parmak izi doğrulanamadı" : language.equals("ar") ? "تعذر التحقق بالبصمة" : "تأیید اثر انگشت قابل اجرا نیست";
             runOnUiThread(() -> {
                 if (!hasBiometric()) {
-                    Toast.makeText(MainActivity.this, "اثر انگشت ثبت‌شده در دسترس نیست", Toast.LENGTH_LONG).show();
+                    Toast.makeText(MainActivity.this, error, Toast.LENGTH_LONG).show();
                     return;
                 }
                 if (Build.VERSION.SDK_INT < 28) return;
                 try {
                     BiometricPrompt prompt = new BiometricPrompt.Builder(MainActivity.this)
-                        .setTitle("همسایه‌بان")
-                        .setSubtitle("تأیید هویت با اثر انگشت")
-                        .setNegativeButton("انصراف", getMainExecutor(), (dialog, which) -> {})
+                        .setTitle("Hamsayeban")
+                        .setSubtitle(subtitle)
+                        .setNegativeButton(cancel, getMainExecutor(), (dialog, which) -> {})
                         .build();
                     prompt.authenticate(new CancellationSignal(), getMainExecutor(),
                         new BiometricPrompt.AuthenticationCallback() {
@@ -115,11 +119,11 @@ public class MainActivity extends Activity {
                                 webView.evaluateJavascript("window.HamsayebanBiometricSuccess && window.HamsayebanBiometricSuccess()", null);
                             }
                             @Override public void onAuthenticationError(int code, CharSequence message) {
-                                Toast.makeText(MainActivity.this, message, Toast.LENGTH_SHORT).show();
+                                Toast.makeText(MainActivity.this, error, Toast.LENGTH_SHORT).show();
                             }
                         });
                 } catch (Exception ex) {
-                    Toast.makeText(MainActivity.this, "تأیید اثر انگشت قابل اجرا نیست", Toast.LENGTH_LONG).show();
+                    Toast.makeText(MainActivity.this, error, Toast.LENGTH_LONG).show();
                 }
             });
         }
