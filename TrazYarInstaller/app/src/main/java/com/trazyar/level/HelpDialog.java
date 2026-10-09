@@ -48,80 +48,125 @@ public final class HelpDialog {
 
   public static void show(Activity activity,int startingPage,IntConsumer selectTool,Runnable onClosed){
     final int[] page={Math.max(0,Math.min(TutorialContent.count()-1,startingPage))};
-    LinearLayout layout=new LinearLayout(activity);
-    layout.setOrientation(LinearLayout.VERTICAL);
-    layout.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
-    layout.setPadding(dp(activity,18),dp(activity,18),dp(activity,18),dp(activity,18));
-    layout.setBackground(rounded(BG,dp(activity,22)));
 
-    TextView heading=label(activity,21,GREEN);
-    heading.setTypeface(null,1);
-    layout.addView(heading);
-    TextView counter=label(activity,12,GOLD);
-    layout.addView(counter);
+    // A fixed header and footer surround ONLY the scrolling lesson body.
+    // This prevents long square/protractor instructions from hiding navigation buttons.
+    LinearLayout outer=new LinearLayout(activity);
+    outer.setOrientation(LinearLayout.VERTICAL);
+    outer.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
+    outer.setPadding(dp(activity,13),dp(activity,14),dp(activity,13),dp(activity,12));
+    outer.setBackground(rounded(BG,dp(activity,20)));
+
+    TextView heading=label(activity,20,GREEN);
+    heading.setTypeface(null,1);outer.addView(heading);
+    TextView counter=label(activity,12,GOLD);outer.addView(counter);
+
+    TextView quickLabel=label(activity,13,MUTED);
+    quickLabel.setText("انتخاب مستقیم آموزش:");
+    outer.addView(quickLabel);
+
+    String[] names={"تراز","شیب","زاویه‌سنج","گونیا"};
+    Button[] chips=new Button[4];
+    LinearLayout shortcuts=new LinearLayout(activity);
+    shortcuts.setOrientation(LinearLayout.HORIZONTAL);
+    shortcuts.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
+    outer.addView(shortcuts,new LinearLayout.LayoutParams(-1,dp(activity,46)));
+    for(int i=0;i<4;i++){
+      Button chip=makeButton(activity,names[i],false);
+      chip.setTextSize(12);
+      chip.setMinHeight(dp(activity,42));
+      LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,dp(activity,43),1);
+      p.setMargins(dp(activity,2),0,dp(activity,2),0);
+      shortcuts.addView(chip,p);
+      chips[i]=chip;
+    }
+
+    LinearLayout body=new LinearLayout(activity);
+    body.setOrientation(LinearLayout.VERTICAL);
+    body.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
+    body.setPadding(dp(activity,2),dp(activity,4),dp(activity,2),dp(activity,8));
+    ScrollView scroll=new ScrollView(activity);
+    scroll.setFillViewport(false);
+    scroll.setVerticalScrollBarEnabled(true);
+    scroll.addView(body);
+    outer.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
 
     Illustration graphic=new Illustration(activity);
-    LinearLayout.LayoutParams gp=new LinearLayout.LayoutParams(-1,dp(activity,165));
-    gp.topMargin=dp(activity,9);gp.bottomMargin=dp(activity,9);
-    layout.addView(graphic,gp);
+    LinearLayout.LayoutParams graphicParams=new LinearLayout.LayoutParams(-1,dp(activity,144));
+    graphicParams.setMargins(0,dp(activity,5),0,dp(activity,9));
+    body.addView(graphic,graphicParams);
 
     TextView instructions=label(activity,15,WHITE);
-    instructions.setLineSpacing(dp(activity,3),1.05f);
-    layout.addView(instructions);
+    instructions.setLineSpacing(dp(activity,4),1.1f);
+    body.addView(instructions,new LinearLayout.LayoutParams(-1,-2));
 
+    // Keep launch, Back/Next and Close outside scroll view on every screen size.
     Button launch=makeButton(activity,"باز کردن این ابزار",true);
-    LinearLayout.LayoutParams launchParams=new LinearLayout.LayoutParams(-1,dp(activity,48));
-    launchParams.topMargin=dp(activity,15);
-    layout.addView(launch,launchParams);
+    LinearLayout.LayoutParams launchParams=new LinearLayout.LayoutParams(-1,dp(activity,47));
+    launchParams.topMargin=dp(activity,7);
+    outer.addView(launch,launchParams);
 
     LinearLayout nav=new LinearLayout(activity);
     nav.setOrientation(LinearLayout.HORIZONTAL);
     nav.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
-    LinearLayout.LayoutParams np=new LinearLayout.LayoutParams(-1,dp(activity,48));
-    np.topMargin=dp(activity,14);
-    layout.addView(nav,np);
+    LinearLayout.LayoutParams np=new LinearLayout.LayoutParams(-1,dp(activity,49));
+    np.topMargin=dp(activity,9);
+    outer.addView(nav,np);
     Button previous=makeButton(activity,"قبلی",false);
     Button next=makeButton(activity,"بعدی",true);
     Button close=makeButton(activity,"بستن",false);
-    LinearLayout.LayoutParams bp=new LinearLayout.LayoutParams(0,-1,1);
-    bp.setMargins(dp(activity,3),0,dp(activity,3),0);
-    nav.addView(previous,new LinearLayout.LayoutParams(bp));
-    nav.addView(next,new LinearLayout.LayoutParams(bp));
-    nav.addView(close,new LinearLayout.LayoutParams(bp));
+    for(Button b:new Button[]{previous,next,close}){
+      LinearLayout.LayoutParams bp=new LinearLayout.LayoutParams(0,-1,1);
+      bp.setMargins(dp(activity,2),0,dp(activity,2),0);
+      nav.addView(b,bp);
+    }
 
-    ScrollView scroll=new ScrollView(activity);
-    scroll.setFillViewport(false);
-    scroll.setVerticalScrollBarEnabled(false);
-    scroll.addView(layout);
-    AlertDialog dialog=new AlertDialog.Builder(activity).setView(scroll).create();
-
+    AlertDialog dialog=new AlertDialog.Builder(activity).setView(outer).create();
     Runnable render=()->{
       int index=page[0];
       heading.setText(TutorialContent.TITLES[index]);
-      counter.setText("آموزش "+(index+1)+" از "+TutorialContent.count());
+      counter.setText("بخش "+(index+1)+" از "+TutorialContent.count());
       instructions.setText(TutorialContent.DETAILS[index]);
       graphic.setPage(index);
       previous.setEnabled(index>0);
-      previous.setAlpha(index>0?1f:.4f);
+      previous.setAlpha(index>0?1:.4f);
       next.setText(index==TutorialContent.count()-1?"پایان":"بعدی");
       int tool=TutorialContent.toolForPage(index);
       launch.setVisibility(tool<0?View.GONE:View.VISIBLE);
       if(tool>=0){
         launch.setText("باز کردن "+new String[]{"تراز حبابی","شیب‌سنج","زاویه‌سنج","گونیا"}[tool]);
       }
+      for(int i=0;i<chips.length;i++){
+        boolean selected=index==i+1;
+        chips[i].setTextColor(selected?BG:WHITE);
+        chips[i].setBackground(rounded(selected?GREEN:0xff315341,dp(activity,10)));
+      }
+      scroll.post(()->scroll.scrollTo(0,0));
     };
+    for(int i=0;i<chips.length;i++){
+      final int target=i+1;
+      chips[i].setOnClickListener(v->{page[0]=target;render.run();});
+    }
     previous.setOnClickListener(v->{if(page[0]>0){page[0]--;render.run();}});
-    next.setOnClickListener(v->{if(page[0]<TutorialContent.count()-1){page[0]++;render.run();}else dialog.dismiss();});
+    next.setOnClickListener(v->{
+      if(page[0]<TutorialContent.count()-1){page[0]++;render.run();}
+      else dialog.dismiss();
+    });
     close.setOnClickListener(v->dialog.dismiss());
     launch.setOnClickListener(v->{
-      int tool=TutorialContent.toolForPage(page[0]);
+      int target=TutorialContent.toolForPage(page[0]);
       dialog.dismiss();
-      if(tool>=0&&selectTool!=null)selectTool.accept(tool);
+      if(target>=0&&selectTool!=null)selectTool.accept(target);
     });
     dialog.setOnDismissListener(d->{if(onClosed!=null)onClosed.run();});
     render.run();
     dialog.show();
-    if(dialog.getWindow()!=null)dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+    if(dialog.getWindow()!=null){
+      dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+      int width=Math.min((int)(activity.getResources().getDisplayMetrics().widthPixels*.96f),dp(activity,480));
+      int height=Math.min((int)(activity.getResources().getDisplayMetrics().heightPixels*.87f),dp(activity,720));
+      dialog.getWindow().setLayout(width,height);
+    }
   }
 
   /** Small vector drawings — no downloaded images, internet, or font dependencies. */

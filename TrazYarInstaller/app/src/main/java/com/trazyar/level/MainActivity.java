@@ -57,8 +57,8 @@ public class MainActivity extends Activity implements SensorEventListener {
     buildUI();
     if(sensor==null){start.setEnabled(false);status.setText("حسگر مناسب پیدا نشد");sensorStatus.setText("این گوشی حسگر شتاب/گرانش مورد نیاز را ندارد.");}
     else startMeasure(); // Begin sensor measurement automatically; tool tabs remain one-tap.
-    if(!prefs.getBoolean("tutorialSeenV26",false)){
-      prefs.edit().putBoolean("tutorialSeenV26",true).apply();
+    if(!prefs.getBoolean("tutorialSeenV27",false)){
+      prefs.edit().putBoolean("tutorialSeenV27",true).apply();
       handler.postDelayed(()->{
         if(!isFinishing()&&!isDestroyed())openTutorial(0);
       },750);
@@ -79,7 +79,30 @@ public class MainActivity extends Activity implements SensorEventListener {
     root.addView(text("همیشه در سطح درست  •  TRAZYAR",12,GOLD));gap(root,10);
     Button helpButton=button("📖 آموزش استفاده از چهار ابزار",false);
     root.addView(helpButton,new LinearLayout.LayoutParams(-1,px(52)));
-    helpButton.setOnClickListener(v->openTutorial(TutorialContent.pageForTool(measurementMode)));
+    helpButton.setOnClickListener(v->openTutorial(0));
+    gap(root,9);
+    TextView quickHelpTitle=text("آموزش مستقیم ابزارها",16,GOLD);
+    quickHelpTitle.setTypeface(null,1);
+    root.addView(quickHelpTitle);
+    // Always-visible, one-tap help shortcuts; no need to find the next page in a long dialog.
+    String[] helpNames={"آموزش تراز حبابی","آموزش شیب‌سنج","آموزش زاویه‌سنج","آموزش گونیا"};
+    for(int helpRow=0;helpRow<2;helpRow++){
+      LinearLayout shortcutRow=new LinearLayout(this);
+      shortcutRow.setOrientation(LinearLayout.HORIZONTAL);
+      shortcutRow.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
+      root.addView(shortcutRow,new LinearLayout.LayoutParams(-1,px(50)));
+      for(int col=0;col<2;col++){
+        final int tool=helpRow*2+col;
+        Button shortcut=button("؟ "+helpNames[tool],false);
+        shortcut.setTextSize(13);
+        shortcut.setMinWidth(0);
+        shortcut.setPadding(px(2),0,px(2),0);
+        LinearLayout.LayoutParams hparams=new LinearLayout.LayoutParams(0,px(45),1);
+        hparams.setMargins(px(3),px(2),px(3),px(2));
+        shortcutRow.addView(shortcut,hparams);
+        shortcut.setOnClickListener(v->openTutorial(TutorialContent.pageForTool(tool)));
+      }
+    }
     gap(root,13);
     LinearLayout panel=new LinearLayout(this);panel.setOrientation(1);panel.setPadding(px(11),px(16),px(11),px(17));panel.setBackground(background(PANEL,0xff406E50,23));root.addView(panel);
     TextView toolTitle=text("ابزار را انتخاب کنید",17,GOLD);toolTitle.setTypeface(null,1);panel.addView(toolTitle);
@@ -197,7 +220,7 @@ public class MainActivity extends Activity implements SensorEventListener {
       public void onStartTrackingTouch(SeekBar bar){} public void onStopTrackingTouch(SeekBar bar){}
     });
     gap(root,12);root.addView(text("زاویه‌سنج و گونیا: گوشی را با صفحهٔ قائم نگه دارید. در گونیا، ضلع اول را ثبت کنید و برای ضلع دوم، گوشی را در همان صفحه بچرخانید. چرخش روی میز افقی با حسگر گرانش اندازه‌گیری نمی‌شود.",12,MUTED));
-    gap(root,12);root.addView(text("تراز یار • نسخهٔ ۲٫۶ • آموزش کاربری + بوق فقط در تراز",11,GOLD));
+    gap(root,12);root.addView(text("تراز یار • نسخهٔ ۲٫۷ • آموزش واضح گونیا و زاویه‌سنج",11,GOLD));
   }
   void openTutorial(int firstPage){
     if(tutorialOpen)return;
