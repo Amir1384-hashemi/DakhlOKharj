@@ -11,8 +11,6 @@ import android.hardware.Sensor;
 import android.hardware.SensorManager;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
-import android.media.MediaPlayer;
-import android.media.PlaybackParams;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.graphics.*;
@@ -23,47 +21,23 @@ import java.util.Locale;
 
 public class MainActivity extends Activity implements SensorEventListener {
   static final int BG=0xff081A13, PANEL=0xff112A20, GREEN=0xffA8ED65, GOLD=0xffE8C87D, TEXT=0xffF1F9E9, MUTED=0xffA7BCAE;
-  SensorManager manager; Sensor sensor; MediaPlayer player; Vibrator vibrator;
-  boolean speaking=false, measuring=false, resumed=false, voice=true, observed=false, lowpassInit=false;
-  boolean haptic=true, guided=true, nearArmed=true;
-  int instructionCounter=0;
-  double previousAnnouncementDistance=Double.NaN;
-  int nearIdx=0, farIdx=0, successIdx=0;
-
-  // Four selectable original voice profiles. None imitates a specific performer.
-  final int[][] nearAudio = {
-    {R.raw.kid_near_1,R.raw.kid_near_2},
-    {R.raw.girl_near_1,R.raw.girl_near_2},
-    {R.raw.woman_near_1,R.raw.woman_near_2},
-    {R.raw.cinema_near_1,R.raw.cinema_near_2}
-  };
-  final int[][] farAudio = {
-    {R.raw.kid_far_1,R.raw.kid_far_2},
-    {R.raw.girl_far_1,R.raw.girl_far_2},
-    {R.raw.woman_far_1,R.raw.woman_far_2},
-    {R.raw.cinema_far_1,R.raw.cinema_far_2}
-  };
-  final int[][] successAudio = {
-    {R.raw.kid_ok_1,R.raw.kid_win2},{R.raw.girl_ok_1,R.raw.girl_win2},{R.raw.woman_ok_1,R.raw.woman_win2},{R.raw.cinema_ok_1,R.raw.cinema_win2}
-  };
-  // Order: right, left, top, bottom. Applies when screen faces upward.
-  final int[][] directionAudio={
-    {R.raw.kid_right,R.raw.kid_left,R.raw.kid_top,R.raw.kid_bottom},
-    {R.raw.girl_right,R.raw.girl_left,R.raw.girl_top,R.raw.girl_bottom},
-    {R.raw.woman_right,R.raw.woman_left,R.raw.woman_top,R.raw.woman_bottom},
-    {R.raw.cinema_right,R.raw.cinema_left,R.raw.cinema_top,R.raw.cinema_bottom}
-  };
-  final float[] voicePitch={1.25f,1.09f,1.0f,0.90f};
-  final float[] voiceSpeed={1.06f,1.04f,1.0f,0.96f};
-  int voiceProfile=0, measurementMode=0;
+  SensorManager manager; Sensor sensor; Vibrator vibrator;
+  final BeepEngine beeper=new BeepEngine();
+  boolean measuring=false,resumed=false,observed=false,lowpassInit=false;
+  boolean haptic=true,beepEnabled=true,nearArmed=true;
+  float beepVolume=.70f;
+  long previewUntil=0;
+  double previewError=12;
+  boolean previewSteady=false;
+  int measurementMode=0;
   double tiltDegrees=0, slopePercent=0, edgeAngle=0, referenceAngle=Double.NaN, squareAngle=0;
   boolean edgeAngleValid=false;
   final float[] gv=new float[3];
   double zeroX=0,zeroY=0,rawX=0,rawY=0,x=0,y=0,tolerance=.5;
-  int state=-1, candidate=-1, interval=5000;
-  long candidateAt=0,lastVoice=0,lastReading=0,lastSensorUi=0;
+  int state=-1, candidate=-1;
+  long candidateAt=0,lastReading=0,lastSensorUi=0;
   SharedPreferences prefs;
-  TextView status, angles, directions, resultValue, resultDescription, modeHint, sensorStatus;
+  TextView status, angles, directions, resultValue, resultDescription, modeHint, sensorStatus, beepStatus;
   Button start, calibrate, captureReference;
   final Button[] toolButtons=new Button[4];
   LevelDrawing drawing; MeasurementGauge meter;
@@ -76,7 +50,7 @@ public class MainActivity extends Activity implements SensorEventListener {
   @Override public void onCreate(Bundle b) {
     super.onCreate(b); getWindow().setStatusBarColor(BG);getWindow().setNavigationBarColor(BG);
     prefs=getSharedPreferences("trazyar",MODE_PRIVATE);
-    tolerance=prefs.getFloat("tol",.5f);voice=prefs.getBoolean("voice",true);interval=prefs.getInt("repeat",5000);measurementMode=Math.max(0,Math.min(3,prefs.getInt("measurementMode",0)));haptic=prefs.getBoolean("haptic",true);guided=prefs.getBoolean("guided",true);voiceProfile=Math.max(0,Math.min(3,prefs.getInt("voiceProfile",0)));
+    tolerance=prefs.getFloat("tol",.5f);measurementMode=Math.max(0,Math.min(3,prefs.getInt("measurementMode",0)));haptic=prefs.getBoolean("haptic",true);beepEnabled=prefs.getBoolean("beepEnabled",true);beepVolume=prefs.getFloat("beepVolume",.70f);
     manager=(SensorManager)getSystemService(Context.SENSOR_SERVICE);
     vibrator=(Vibrator)getSystemService(Context.VIBRATOR_SERVICE);
     if(manager!=null){sensor=manager.getDefaultSensor(Sensor.TYPE_GRAVITY);if(sensor==null)sensor=manager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);}
@@ -85,11 +59,11 @@ public class MainActivity extends Activity implements SensorEventListener {
     else startMeasure(); // Begin sensor measurement automatically; tool tabs remain one-tap.
     handler.post(new Runnable(){public void run() {
       long now=SystemClock.elapsedRealtime();
-      if(resumed&&measuring) {
-        if(observed&&now-lastReading>3000){observed=false;state=-1;status.setText("ارتباط حسگر قطع شده");sensorStatus.setText("حسگر: دادهٔ جدیدی دریافت نمی‌شود");stopVoice();}
-        else if(state==0&&observed&&voice&&!speaking&&now-lastVoice>=interval){if(measurementMode==0)announceLevel();else if(measurementMode==3)announceSquare();}
+      if(resumed&&measuring&&observed&&now-lastReading>3000){
+        observed=false;state=-1;status.setText("ارتباط حسگر قطع شده");
+        sensorStatus.setText("حسگر: دادهٔ جدیدی دریافت نمی‌شود");refreshBeep();
       }
-      handler.postDelayed(this,250);
+      handler.postDelayed(this,500);
     }});
   }
   void buildUI(){
@@ -124,6 +98,8 @@ public class MainActivity extends Activity implements SensorEventListener {
     status=text("آمادهٔ اندازه‌گیری",19,GOLD);status.setTypeface(null,1);panel.addView(status);
     sensorStatus=text("حسگر: در انتظار دریافت داده",12,MUTED);
     panel.addView(sensorStatus);
+    beepStatus=text("بوق راهنما: در انتظار سنجش",13,GOLD);
+    panel.addView(beepStatus);
 
     LinearLayout row=new LinearLayout(this);row.setOrientation(LinearLayout.HORIZONTAL);
     row.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
@@ -137,7 +113,7 @@ public class MainActivity extends Activity implements SensorEventListener {
     start.setOnClickListener(v->{if(measuring)stopMeasure();else startMeasure();});
     calibrate.setOnClickListener(v->{if(measurementMode==0&&observed){
       zeroX=rawX;zeroY=rawY;state=-1;candidate=-1;candidateAt=0;
-      previousAnnouncementDistance=Double.NaN;updateLevel();
+      updateLevel();
       Toast.makeText(this,"کالیبره شد",Toast.LENGTH_SHORT).show();
     }});
     gap(panel,9);
@@ -152,7 +128,6 @@ public class MainActivity extends Activity implements SensorEventListener {
     captureReference.setOnClickListener(v->{
       if(!measuring||!observed||!edgeAngleValid){Toast.makeText(this,"گوشی را عمودی نگه دارید و سنجش را شروع کنید",Toast.LENGTH_LONG).show();return;}
       referenceAngle=edgeAngle;state=-1;candidate=-1;candidateAt=0;nearArmed=true;
-      stopVoice();
       Toast.makeText(this,"مرجع ثبت شد؛ لبهٔ گوشی را روی ضلع دوم در همان صفحه قرار دهید.",Toast.LENGTH_LONG).show();
       refreshMeasureUI();
     });
@@ -162,58 +137,48 @@ public class MainActivity extends Activity implements SensorEventListener {
     updateModeUI();
 
     gap(root,16);
-    LinearLayout opt=new LinearLayout(this);opt.setOrientation(1);opt.setPadding(px(16),px(13),px(16),px(16));opt.setBackground(background(PANEL,0xff3A6849,20));root.addView(opt);
-    TextView voiceTitle=text("🎙️ گویندهٔ طنز و تشویقی فارسی",19,TEXT);opt.addView(voiceTitle);gap(opt,10);
-    Switch voiceToggle=new Switch(this);voiceToggle.setText("گویندهٔ بامزه روشن باشد");voiceToggle.setTextSize(15);voiceToggle.setTextColor(TEXT);voiceToggle.setChecked(voice);opt.addView(voiceToggle);
-    voiceToggle.setOnCheckedChangeListener((sw,on)->{voice=on;prefs.edit().putBoolean("voice",on).apply();if(!on)stopVoice();});
-    Switch guidedToggle=new Switch(this);
-    guidedToggle.setText("راهنمای صوتی جهت‌دار (چپ، راست، بالا، پایین)");
-    guidedToggle.setTextSize(14);guidedToggle.setTextColor(TEXT);guidedToggle.setChecked(guided);opt.addView(guidedToggle);
-    guidedToggle.setOnCheckedChangeListener((sw,on)->{guided=on;prefs.edit().putBoolean("guided",on).apply();});
-    Switch hapticToggle=new Switch(this);
-    hapticToggle.setText("لرزش تشویقی و لرزش هنگام تراز کامل");
-    hapticToggle.setTextSize(14);hapticToggle.setTextColor(TEXT);hapticToggle.setChecked(haptic);opt.addView(hapticToggle);
-    hapticToggle.setOnCheckedChangeListener((sw,on)->{haptic=on;prefs.edit().putBoolean("haptic",on).apply();});
-
-    gap(opt,8);
-    TextView voiceSelectTitle=text("شخصیت گوینده (فارسی معیار)",15,GOLD);opt.addView(voiceSelectTitle);
-    Spinner voices=new Spinner(this);
-    String[] voiceNames={"بچهٔ شیطون و پرانرژی","دختر شیطون و بازیگوش","خانم شوخ‌طبع","مرد سینمایی با صدای بم"};
-    ArrayAdapter<String> voiceAdapter=new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,voiceNames);
-    voices.setAdapter(voiceAdapter);
-    voices.setSelection(voiceProfile);opt.addView(voices);
-    voices.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){
-      public void onItemSelected(android.widget.AdapterView<?> parent,View item,int pos,long id){
-        int profile=Math.max(0,Math.min(3,pos));
-        if(profile!=voiceProfile){
-          stopVoice();voiceProfile=profile;nearIdx=0;farIdx=0;successIdx=0;
-          previousAnnouncementDistance=Double.NaN;
-          prefs.edit().putInt("voiceProfile",profile).apply();
-        }
+    LinearLayout opt=new LinearLayout(this);
+    opt.setOrientation(1);opt.setPadding(px(16),px(13),px(16),px(16));
+    opt.setBackground(background(PANEL,0xff3A6849,20));root.addView(opt);
+    TextView beepTitle=text("🔔 راهنمای صوتی بوقی",19,GREEN);
+    beepTitle.setTypeface(null,1);opt.addView(beepTitle);
+    opt.addView(text("دور از تراز: بوق کوتاه و فاصله‌دار | نزدیک تراز: قوی‌تر و متراکم‌تر | تراز کامل: بوق ممتد",13,MUTED));
+    Switch toneToggle=new Switch(this);
+    toneToggle.setText("صدای بوق روشن باشد");toneToggle.setTextSize(16);
+    toneToggle.setTextColor(TEXT);toneToggle.setChecked(beepEnabled);opt.addView(toneToggle);
+    toneToggle.setOnCheckedChangeListener((sw,on)->{
+      beepEnabled=on;prefs.edit().putBoolean("beepEnabled",on).apply();refreshBeep();
+    });
+    TextView volTitle=text("بلندی صدای بوق: "+Math.round(beepVolume*100)+"٪",15,GOLD);opt.addView(volTitle);
+    SeekBar volSeek=new SeekBar(this);volSeek.setMax(100);volSeek.setProgress(Math.round(beepVolume*100));opt.addView(volSeek);
+    volSeek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
+      public void onProgressChanged(SeekBar sb,int progress,boolean fromUser){
+        beepVolume=progress/100f;volTitle.setText("بلندی صدای بوق: "+progress+"٪");
+        prefs.edit().putFloat("beepVolume",beepVolume).apply();refreshBeep();
       }
-      public void onNothingSelected(android.widget.AdapterView<?> parent){}
+      public void onStartTrackingTouch(SeekBar sb){}
+      public void onStopTrackingTouch(SeekBar sb){}
     });
-    opt.addView(text("لحن‌ها شخصیت‌پردازی‌شده‌اند؛ صدای مرد سینمایی شبیه‌سازی شخص واقعی نیست.",12,MUTED));
-
-    TextView intervalLabel=text("فاصلهٔ تکرار جمله‌های طنز",14,MUTED);opt.addView(intervalLabel);
-    Spinner options=new Spinner(this);
-    String[] repeats={"هر ۳ ثانیه","هر ۵ ثانیه","هر ۸ ثانیه","هر ۱۲ ثانیه"};
-    int[] repeatsMs={3000,5000,8000,12000};
-    ArrayAdapter<String> adapter=new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,repeats); options.setAdapter(adapter);
-    options.setSelection(interval==3000?0:interval==8000?2:interval==12000?3:1);opt.addView(options);
-    options.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){
-      public void onItemSelected(android.widget.AdapterView<?> p,View v,int position,long id){interval=repeatsMs[position];prefs.edit().putInt("repeat",interval).apply();}
-      public void onNothingSelected(android.widget.AdapterView<?> p){}
+    LinearLayout previews=new LinearLayout(this);previews.setOrientation(LinearLayout.HORIZONTAL);
+    previews.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
+    opt.addView(previews,new LinearLayout.LayoutParams(-1,px(50)));
+    String[] labels={"دور","نزدیک","ممتد"};
+    for(int i=0;i<3;i++){
+      final int sample=i;
+      Button b=button(labels[i],false);b.setTextSize(13);
+      LinearLayout.LayoutParams pa=new LinearLayout.LayoutParams(0,-1,1);
+      pa.setMargins(px(2),0,px(2),0);previews.addView(b,pa);
+      b.setOnClickListener(v->previewTone(sample));
+    }
+    opt.addView(text("صدای رسانهٔ گوشی را روشن کنید. بوق در تراز، شیب‌سنج و گونیا کاربرد دارد؛ در زاویه‌سنج بدون هدف، بی‌صداست.",12,MUTED));
+    Switch hapticToggle=new Switch(this);
+    hapticToggle.setText("لرزش نزدیک تراز و هنگام تراز کامل");hapticToggle.setTextSize(15);
+    hapticToggle.setTextColor(TEXT);hapticToggle.setChecked(haptic);opt.addView(hapticToggle);
+    hapticToggle.setOnCheckedChangeListener((sw,on)->{
+      haptic=on;prefs.edit().putBoolean("haptic",on).apply();
     });
-    
-    Button testFar=button("😂 آزمایش شوخی وقتی دور است",false);opt.addView(testFar,new LinearLayout.LayoutParams(-1,px(48)));
-    testFar.setOnClickListener(v->playClip(farAudio[voiceProfile][(farIdx++)%farAudio[voiceProfile].length],true));
-    Button testNear=button("👏 آزمایش تشویق وقتی نزدیک است",false);opt.addView(testNear,new LinearLayout.LayoutParams(-1,px(48)));
-    testNear.setOnClickListener(v->playClip(nearAudio[voiceProfile][(nearIdx++)%nearAudio[voiceProfile].length],true));
-    Button testOk=button("🎉 آزمایش جشن تراز شدن",false);opt.addView(testOk,new LinearLayout.LayoutParams(-1,px(48)));
-    testOk.setOnClickListener(v->playClip(successAudio[voiceProfile][(successIdx++)%successAudio[voiceProfile].length],true));
-    opt.addView(text("صداها از قبل داخل برنامه‌اند و بدون اینترنت یا زبان فارسی گوشی پخش می‌شوند.",12,GOLD));
     gap(root,14);
+    LinearLayout settings=    gap(root,14);
     LinearLayout settings=new LinearLayout(this);settings.setOrientation(1);settings.setPadding(px(16),px(13),px(16),px(14));settings.setBackground(background(PANEL,0xff3A6849,20));root.addView(settings);
     TextView sens=text(String.format(Locale.US,"حساسیت: ±%.1f°",tolerance),17,GREEN);settings.addView(sens);
     SeekBar seek=new SeekBar(this);seek.setMax(18);seek.setProgress((int)Math.round((tolerance-.2)*10));settings.addView(seek);
@@ -223,21 +188,21 @@ public class MainActivity extends Activity implements SensorEventListener {
       public void onStartTrackingTouch(SeekBar bar){} public void onStopTrackingTouch(SeekBar bar){}
     });
     gap(root,12);root.addView(text("زاویه‌سنج و گونیا: گوشی را با صفحهٔ قائم نگه دارید. در گونیا، ضلع اول را ثبت کنید و برای ضلع دوم، گوشی را در همان صفحه بچرخانید. چرخش روی میز افقی با حسگر گرانش اندازه‌گیری نمی‌شود.",12,MUTED));
-    gap(root,12);root.addView(text("تراز یار • نسخهٔ ۲٫۳ • چهار ابزار + محاسبات آزموده‌شده",11,GOLD));
+    gap(root,12);root.addView(text("تراز یار • نسخهٔ ۲٫۴ • بوق نزدیک‌شونده و صدای ممتد تراز",11,GOLD));
   }
   void startMeasure() {
     if(sensor==null)return;
-    measuring=true;observed=false;lowpassInit=false;zeroX=0;zeroY=0;state=-1;candidate=-1;candidateAt=0;referenceAngle=Double.NaN;previousAnnouncementDistance=Double.NaN;nearArmed=true;instructionCounter=0;
+    measuring=true;observed=false;lowpassInit=false;zeroX=0;zeroY=0;state=-1;candidate=-1;candidateAt=0;referenceAngle=Double.NaN;nearArmed=true;
     status.setText("در حال خواندن حسگر...");start.setText("■ توقف سنجش");calibrate.setEnabled(false);
     getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
     if(resumed)manager.registerListener(this,sensor,SensorManager.SENSOR_DELAY_UI);
-    refreshMeasureUI();
+    refreshMeasureUI();refreshBeep();
   }
   void stopMeasure() {
     measuring=false;observed=false;state=-1;candidate=-1;
     if(manager!=null)manager.unregisterListener(this);
     getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-    start.setText("▶ شروع سنجش");calibrate.setEnabled(false);status.setText("سنجش متوقف شد");angles.setText("X: --.-°       Y: --.-°");drawing.setTilt(0,0,false);resultValue.setText("—");stopVoice();refreshMeasureUI();
+    start.setText("▶ شروع سنجش");calibrate.setEnabled(false);status.setText("سنجش متوقف شد");angles.setText("X: --.-°       Y: --.-°");drawing.setTilt(0,0,false);resultValue.setText("—");refreshBeep();refreshMeasureUI();
   }
   // Calibrated axes: with the display facing up, positive gravity X means
   // the phone's right edge is lower and should be raised; positive Y means
@@ -265,13 +230,12 @@ public class MainActivity extends Activity implements SensorEventListener {
     if(measurementMode!=mode){
       measurementMode=mode;
       prefs.edit().putInt("measurementMode",mode).apply();
-      stopVoice();state=-1;candidate=-1;candidateAt=0;
-      previousAnnouncementDistance=Double.NaN;
+      state=-1;candidate=-1;candidateAt=0;
       // A reference from another visit is invalid; each square session captures its own.
       if(mode==3)referenceAngle=Double.NaN;
     }
     if(sensor!=null&&!measuring)startMeasure();
-    updateModeUI();
+    updateModeUI();refreshBeep();
     Toast.makeText(this,new String[]{"تراز حبابی","شیب‌سنج فعال شد","زاویه‌سنج فعال شد","گونیا فعال شد"}[mode],Toast.LENGTH_SHORT).show();
   }
   void updateModeUI(){
@@ -305,7 +269,7 @@ public class MainActivity extends Activity implements SensorEventListener {
       directions.setVisibility(View.VISIBLE);
       status.setText(measuring?"◉ تراز حبابی فعال":"◉ تراز حبابی آماده");
     }
-    refreshMeasureUI();
+    refreshMeasureUI();refreshBeep();
   }
   double angleDifference180(double a,double b){return LevelMath.angleBetweenLines(a,b);}
   void refreshMeasureUI(){
@@ -357,7 +321,7 @@ public class MainActivity extends Activity implements SensorEventListener {
   }
   void updateSquare(){
     if(!edgeAngleValid || Double.isNaN(referenceAngle)){
-      state=-1;candidate=-1;refreshMeasureUI();return;
+      state=-1;candidate=-1;refreshMeasureUI();refreshBeep();return;
     }
     squareAngle=angleDifference180(edgeAngle,referenceAngle);
     double error=Math.abs(90-squareAngle);
@@ -370,20 +334,10 @@ public class MainActivity extends Activity implements SensorEventListener {
     int wanted=error<=Math.max(tolerance,.6)?1:0;
     if(wanted!=candidate){candidate=wanted;candidateAt=now;}
     if(now-candidateAt>=750&&wanted!=state){
-      state=wanted;stopVoice();
+      state=wanted;
       if(state==1){vibrateSuccess();meter.celebrate();}
-      if(voice)announceSquare();
     }
     refreshMeasureUI();
-  }
-  void announceSquare(){
-    if(!resumed||!voice||!observed||!edgeAngleValid||Double.isNaN(referenceAngle))return;
-    double error=Math.abs(90-squareAngle);
-    if(state==1){playClip(successAudio[voiceProfile][(successIdx++)%successAudio[voiceProfile].length],false);}
-    else if(state==0){
-      if(error<=7)playClip(nearAudio[voiceProfile][(nearIdx++)%nearAudio[voiceProfile].length],false);
-      else playClip(farAudio[voiceProfile][(farIdx++)%farAudio[voiceProfile].length],false);
-    }
   }
   void updateLevel(){
     x=rawX-zeroX; y=rawY-zeroY;
@@ -400,12 +354,7 @@ public class MainActivity extends Activity implements SensorEventListener {
     if(wanted!=candidate){candidate=wanted;candidateAt=now;}
     if(now-candidateAt>=750 && wanted!=state) {
       state=wanted;
-      stopVoice();
-      if(state==1) {
-        vibrateSuccess();
-        drawing.celebrate();
-      }
-      if(voice)announceLevel();
+      if(state==1){vibrateSuccess();drawing.celebrate();}
     }
     status.setText(state==1?"✓  تراز است":state==0?"●  در حال تنظیم تراز":"در حال تثبیت حباب...");
     status.setTextColor(state==1?GREEN:state==0?0xffffc29a:GOLD);
@@ -434,58 +383,61 @@ public class MainActivity extends Activity implements SensorEventListener {
     if(measurementMode==0)updateLevel();
     else if(measurementMode==3)updateSquare();
     else refreshMeasureUI();
+    refreshBeep();
   }
   @Override public void onAccuracyChanged(Sensor s,int accuracy){}
-  // Select the joke by calibrated two-axis error and movement trend.
-  // The announcement interval prevents rapid chatter; success is immediate after stability.
-  // Deliver a direction in the selected character's voice, alternating
-  // with humour and encouragement; do not interrupt clips mid-sentence.
-  void announceLevel(){
-    if(!voice || !resumed || !observed)return;
-    if(state==1){
-      previousAnnouncementDistance=0;
-      playClip(successAudio[voiceProfile][(successIdx++)%successAudio[voiceProfile].length],false);
+  void previewTone(int sample){
+    previewError=sample==0?12:sample==1?1.1:0;
+    previewSteady=sample==2;
+    previewUntil=SystemClock.elapsedRealtime()+2000;
+    beeper.start();refreshBeep();
+    handler.postDelayed(()->refreshBeep(),2050);
+  }
+  void refreshBeep(){
+    long now=SystemClock.elapsedRealtime();
+    if(now<previewUntil){
+      beeper.update(true,previewError,tolerance,previewSteady,beepVolume);
+      if(beepStatus!=null)beepStatus.setText("🔔 آزمایش: "+(previewSteady?"ممتد":previewError>5?"بوق کوتاه":"بوق نزدیک"));
       return;
     }
-    if(state!=0)return;
-    double distance=Math.max(Math.abs(x),Math.abs(y));
-    double nearLimit=Math.max(2.5,tolerance*3.0);
-    boolean movingCloser=Double.isFinite(previousAnnouncementDistance) && distance<previousAnnouncementDistance-.75;
-    boolean movingFarther=Double.isFinite(previousAnnouncementDistance) && distance>previousAnnouncementDistance+.75;
-    int id;
-    int round=instructionCounter++;
-    if(distance<=nearLimit || movingCloser){
-      id=nearAudio[voiceProfile][(nearIdx++)%nearAudio[voiceProfile].length];
-    }else if(movingFarther){
-      id=farAudio[voiceProfile][(farIdx++)%farAudio[voiceProfile].length];
-    }else if(guided && round%2==0){
-      id=directionAudio[voiceProfile][correctionDirection()];
-    }else{
-      id=farAudio[voiceProfile][(farIdx++)%farAudio[voiceProfile].length];
+    previewUntil=0;
+    boolean valid=resumed&&beepEnabled&&beepVolume>0&&measuring&&observed&&(now-lastReading<2500);
+    double error=20;boolean locked=false;
+    if(valid){
+      if(measurementMode==0){
+        error=Math.max(Math.abs(x),Math.abs(y));locked=state==1;
+      }else if(measurementMode==1){
+        error=tiltDegrees;locked=tiltDegrees<=Math.max(tolerance,.2);
+      }else if(measurementMode==3&&edgeAngleValid&&!Double.isNaN(referenceAngle)){
+        error=Math.abs(90-squareAngle);locked=state==1;
+      }else valid=false;
     }
-    previousAnnouncementDistance=distance;
-    playClip(id,false);
+    beeper.update(valid,error,tolerance,locked,beepVolume);
+    if(beepStatus!=null){
+      String label=!beepEnabled?"بوق خاموش است":
+      measurementMode==2?"زاویه‌سنج بدون هدف مشخص: بی‌صدا":
+      measurementMode==3&&Double.isNaN(referenceAngle)?"ابتدا ضلع اول گونیا را ثبت کنید":
+      !valid?"در انتظار حسگر و سنجش":
+      locked?"تراز کامل: بوق ممتد":
+      error>7?"دور از تراز: کوتاه و آرام":
+      error>2?"در حال نزدیک‌شدن: سریع‌تر":"خیلی نزدیک: بلند و تقریباً پیوسته";
+      beepStatus.setText("🔔 "+label);
+    }
   }
-  void playClip(int resource,boolean preview){
-    if(!resumed || (!voice && !preview))return;
-    stopVoice();
-    try{
-      final MediaPlayer next=MediaPlayer.create(this,resource);
-      if(next==null){Toast.makeText(this,"بارگذاری صدای طنز ممکن نشد",Toast.LENGTH_SHORT).show();return;}
-      player=next;speaking=true;lastVoice=SystemClock.elapsedRealtime();
-      next.setOnCompletionListener(mp->{if(player==mp){player=null;speaking=false;}mp.release();});
-      next.setOnErrorListener((mp,what,extra)->{if(player==mp){player=null;speaking=false;}mp.release();return true;});
-      next.start();
-      try{next.setPlaybackParams(new PlaybackParams().setSpeed(voiceSpeed[voiceProfile]).setPitch(voicePitch[voiceProfile]));}catch(Exception ignored){} 
-    }catch(Exception e){speaking=false;player=null;Toast.makeText(this,"پخش صدای طنز ممکن نشد",Toast.LENGTH_SHORT).show();}
+  @Override protected void onResume(){
+    super.onResume();resumed=true;beeper.start();
+    if(measuring&&sensor!=null)manager.registerListener(this,sensor,SensorManager.SENSOR_DELAY_UI);
+    refreshBeep();
   }
-  void stopVoice(){
-    speaking=false;MediaPlayer old=player;player=null;
-    if(old!=null){try{old.stop();}catch(Exception ignored){}try{old.release();}catch(Exception ignored){}}
+  @Override protected void onPause(){
+    resumed=false;previewUntil=0;
+    if(manager!=null)manager.unregisterListener(this);
+    beeper.stop();super.onPause();
   }
-  @Override protected void onResume(){super.onResume();resumed=true;if(measuring&&sensor!=null)manager.registerListener(this,sensor,SensorManager.SENSOR_DELAY_UI);}
-  @Override protected void onPause(){resumed=false;if(manager!=null)manager.unregisterListener(this);stopVoice();super.onPause();}
-  @Override protected void onDestroy(){handler.removeCallbacksAndMessages(null);stopVoice();super.onDestroy();}
+  @Override protected void onDestroy(){
+    handler.removeCallbacksAndMessages(null);
+    beeper.stop();super.onDestroy();
+  }
 
   // Glass-and-liquid inspired two-axis bubble level, drawn at device resolution.
   static class LevelDrawing extends View {
