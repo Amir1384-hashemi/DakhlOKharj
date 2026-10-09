@@ -45,17 +45,17 @@ function convert(text,lang){
 const langs=['fa','en','ar','tr'];
 window.HB_LOCALIZE=function(lang){
  if(!langs.includes(lang))lang='fa';
- const root=document.getElementById('app');
+ const root=document.body;
  if(!root)return;
  document.documentElement.lang=lang;
  document.documentElement.dir=lang==='en'||lang==='tr'?'ltr':'rtl';
  if(lang==='fa')return;
  const w=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);
  const list=[];while(w.nextNode())list.push(w.currentNode);
- for(const node of list){const p=node.parentElement;if(!p||p.closest('script,style'))continue;node.nodeValue=convert(node.nodeValue,lang);}
+ for(const node of list){const p=node.parentElement;if(!p||p.closest('script,style'))continue;const next=convert(node.nodeValue,lang);if(next!==node.nodeValue)node.nodeValue=next;}
  const fields=root.querySelectorAll('[title],[placeholder],[aria-label],[alt],input,textarea');
  for(const el of fields){
-  for(const key of ['title','placeholder','aria-label','alt'])if(el.hasAttribute(key))el.setAttribute(key,convert(el.getAttribute(key),lang));
+  for(const key of ['title','placeholder','aria-label','alt'])if(el.hasAttribute(key)){const old=el.getAttribute(key),value=convert(old,lang);if(old!==value)el.setAttribute(key,value);}
   if((el.matches('input,textarea'))&&el.value&&faChars.test(el.value)&&(!el.type||['text','tel','search','textarea'].includes(el.type))){
    el.dataset.hbOriginal=el.value;
    const converted=convert(el.value,lang);
@@ -77,4 +77,21 @@ try{
  window.HB_LOCALIZE(lang);
 }catch{}
 window.HB_TRANSLATE_TEXT=convert;
+function beginAutoLocalization(){
+ if(!document.body || typeof MutationObserver==='undefined')return;
+ let queued=false;
+ const obs=new MutationObserver(()=>{
+   if(queued)return;
+   queued=true;
+   Promise.resolve().then(()=>{
+     queued=false;
+     let chosen='fa';
+     try{chosen=JSON.parse(localStorage.getItem(prefsKey)||'{}').language||'fa';}catch{}
+     if(chosen!=='fa')window.HB_LOCALIZE(chosen);
+   });
+ });
+ obs.observe(document.body,{childList:true,subtree:true,characterData:true,attributes:true,attributeFilter:['placeholder','title','aria-label','alt']});
+}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',beginAutoLocalization,{once:true});
+else beginAutoLocalization();
 })();
