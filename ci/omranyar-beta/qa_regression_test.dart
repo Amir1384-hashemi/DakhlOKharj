@@ -19,7 +19,7 @@ void main() {
       }
       expect(MathEngine.calculate('sin(30)'), closeTo(0.5, 1e-12));
       expect(MathEngine.calculate('cos(pi)', degrees:false), closeTo(-1, 1e-12));
-      expect(MathEngine.calculate('tan(90)'), throwsFormatException);
+      expect(() => MathEngine.calculate('tan(90)'), throwsFormatException);
     });
     test('undefined arithmetic and real-number domains are not masked', () {
       for (final input in ['0/0', '1/0', '0*(1/0)', '0/(x-x)', 'sqrt(-1)', 'ln(-1)', 'logb(1,8)', 'logb(2,0)']) {
