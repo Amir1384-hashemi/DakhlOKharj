@@ -1,0 +1,16 @@
+plugins { id 'com.android.application' }
+android {
+  namespace 'com.trazyar.level'
+  compileSdk 35
+  defaultConfig {
+    applicationId 'com.trazyar.level'
+    minSdk 26
+    targetSdk 34
+    versionCode 4
+    versionName '1.3'
+  }
+  compileOptions {
+    sourceCompatibility JavaVersion.VERSION_17
+    targetCompatibility JavaVersion.VERSION_17
+  }
+}
