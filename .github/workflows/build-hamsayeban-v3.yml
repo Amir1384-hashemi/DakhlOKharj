@@ -22,7 +22,7 @@ jobs:
           from pathlib import Path
           import re
           html=Path('hamsayeban-android/app/src/main/assets/index.html').read_text()
-          for item in ['function collectionPanel','function settlementPanel','function renderSettings','function showTicketDetail','function shareExpense','resident-payment-form','HB_LOCALIZE']:
+          for item in ['function collectionPanel','function settlementPanel','function renderSettings','function showTicketDetail','function shareExpense','resident-payment-form','const phrases =']:
               assert item in html, item
           scripts=[x for x in re.findall(r'<script[^>]*>(.*?)</script>',html,re.S) if x.strip()]
           assert len(scripts)==2
