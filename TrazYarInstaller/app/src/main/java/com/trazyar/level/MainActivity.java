@@ -142,7 +142,7 @@ public class MainActivity extends Activity implements SensorEventListener {
     opt.setBackground(background(PANEL,0xff3A6849,20));root.addView(opt);
     TextView beepTitle=text("🔔 راهنمای صوتی بوقی",19,GREEN);
     beepTitle.setTypeface(null,1);opt.addView(beepTitle);
-    opt.addView(text("دور از تراز: بوق کوتاه و فاصله‌دار | نزدیک تراز: قوی‌تر و متراکم‌تر | تراز کامل: بوق ممتد",13,MUTED));
+    opt.addView(text("فقط تراز حبابی: دور از مرکز بوق کوتاه، نزدیک مرکز سریع‌تر و بلندتر، در مرکز بوق ممتد",13,MUTED));
     Switch toneToggle=new Switch(this);
     toneToggle.setText("صدای بوق روشن باشد");toneToggle.setTextSize(16);
     toneToggle.setTextColor(TEXT);toneToggle.setChecked(beepEnabled);opt.addView(toneToggle);
@@ -170,7 +170,7 @@ public class MainActivity extends Activity implements SensorEventListener {
       pa.setMargins(px(2),0,px(2),0);previews.addView(b,pa);
       b.setOnClickListener(v->previewTone(sample));
     }
-    opt.addView(text("صدای رسانهٔ گوشی را روشن کنید. بوق در تراز، شیب‌سنج و گونیا کاربرد دارد؛ در زاویه‌سنج بدون هدف، بی‌صداست.",12,MUTED));
+    opt.addView(text("صدای رسانهٔ گوشی را روشن کنید. بوق فقط در تراز حبابی فعال است؛ شیب‌سنج، زاویه‌سنج و گونیا کاملاً بی‌صدا هستند.",12,MUTED));
     Switch hapticToggle=new Switch(this);
     hapticToggle.setText("لرزش نزدیک تراز و هنگام تراز کامل");hapticToggle.setTextSize(15);
     hapticToggle.setTextColor(TEXT);hapticToggle.setChecked(haptic);opt.addView(hapticToggle);
@@ -187,7 +187,7 @@ public class MainActivity extends Activity implements SensorEventListener {
       public void onStartTrackingTouch(SeekBar bar){} public void onStopTrackingTouch(SeekBar bar){}
     });
     gap(root,12);root.addView(text("زاویه‌سنج و گونیا: گوشی را با صفحهٔ قائم نگه دارید. در گونیا، ضلع اول را ثبت کنید و برای ضلع دوم، گوشی را در همان صفحه بچرخانید. چرخش روی میز افقی با حسگر گرانش اندازه‌گیری نمی‌شود.",12,MUTED));
-    gap(root,12);root.addView(text("تراز یار • نسخهٔ ۲٫۴ • بوق نزدیک‌شونده و صدای ممتد تراز",11,GOLD));
+    gap(root,12);root.addView(text("تراز یار • نسخهٔ ۲٫۵ • بوق فقط برای تراز حبابی",11,GOLD));
   }
   void startMeasure() {
     if(sensor==null)return;
@@ -227,6 +227,9 @@ public class MainActivity extends Activity implements SensorEventListener {
   void selectMode(int mode){
     if(mode<0||mode>3)return;
     if(measurementMode!=mode){
+      // Silence immediately on leaving the bubble level, including tone previews.
+      previewUntil=0;
+      beeper.update(false,20,tolerance,false,beepVolume);
       measurementMode=mode;
       prefs.edit().putInt("measurementMode",mode).apply();
       state=-1;candidate=-1;candidateAt=0;
@@ -386,6 +389,11 @@ public class MainActivity extends Activity implements SensorEventListener {
   }
   @Override public void onAccuracyChanged(Sensor s,int accuracy){}
   void previewTone(int sample){
+    if(!BeepPattern.allowedMode(measurementMode)){
+      previewUntil=0;beeper.update(false,20,tolerance,false,beepVolume);
+      Toast.makeText(this,"بوق فقط در ابزار «تراز حبابی» فعال است",Toast.LENGTH_SHORT).show();
+      return;
+    }
     previewError=sample==0?12:sample==1?1.1:0;
     previewSteady=sample==2;
     previewUntil=SystemClock.elapsedRealtime()+2000;
@@ -393,6 +401,14 @@ public class MainActivity extends Activity implements SensorEventListener {
     handler.postDelayed(()->refreshBeep(),2050);
   }
   void refreshBeep(){
+    // Enforce silence for inclinometer, angle meter, and carpenter's square
+    // BEFORE preview handling. No other tool may emit a beep.
+    if(!BeepPattern.allowedMode(measurementMode)){
+      previewUntil=0;
+      beeper.update(false,20,tolerance,false,beepVolume);
+      if(beepStatus!=null)beepStatus.setText("🔕 بوق فقط در تراز حبابی فعال است");
+      return;
+    }
     long now=SystemClock.elapsedRealtime();
     if(now<previewUntil){
       beeper.update(true,previewError,tolerance,previewSteady,beepVolume);
@@ -400,22 +416,15 @@ public class MainActivity extends Activity implements SensorEventListener {
       return;
     }
     previewUntil=0;
-    boolean valid=resumed&&beepEnabled&&beepVolume>0&&measuring&&observed&&(now-lastReading<2500);
+    boolean valid=resumed&&beepEnabled&&beepVolume>0&&measuring&&observed&&(now-lastReading<2500)&&BeepPattern.allowedMode(measurementMode);
     double error=20;boolean locked=false;
     if(valid){
-      if(measurementMode==0){
-        error=Math.max(Math.abs(x),Math.abs(y));locked=state==1;
-      }else if(measurementMode==1){
-        error=tiltDegrees;locked=tiltDegrees<=Math.max(tolerance,.2);
-      }else if(measurementMode==3&&edgeAngleValid&&!Double.isNaN(referenceAngle)){
-        error=Math.abs(90-squareAngle);locked=state==1;
-      }else valid=false;
+      error=Math.max(Math.abs(x),Math.abs(y));
+      locked=state==1;
     }
     beeper.update(valid,error,tolerance,locked,beepVolume);
     if(beepStatus!=null){
       String label=!beepEnabled?"بوق خاموش است":
-      measurementMode==2?"زاویه‌سنج بدون هدف مشخص: بی‌صدا":
-      measurementMode==3&&Double.isNaN(referenceAngle)?"ابتدا ضلع اول گونیا را ثبت کنید":
       !valid?"در انتظار حسگر و سنجش":
       locked?"تراز کامل: بوق ممتد":
       error>7?"دور از تراز: کوتاه و آرام":

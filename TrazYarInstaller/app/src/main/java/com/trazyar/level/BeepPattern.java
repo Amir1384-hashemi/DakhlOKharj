@@ -1,5 +1,8 @@
 package com.trazyar.level;
 public final class BeepPattern {
+  /** The bubble level is the ONLY tool authorised to produce a beep. */
+  public static boolean allowedMode(int mode){return mode==0;}
+
   private BeepPattern(){}
   public static final class Step {
     public final int periodMs,onMs;public final double amplitude;public final boolean continuous;

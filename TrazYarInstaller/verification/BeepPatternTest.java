@@ -17,6 +17,11 @@ public final class BeepPatternTest {
     check("zero tolerance safe",BeepPattern.of(1,0,false).onMs>0);
     check("NaN safe",BeepPattern.of(Double.NaN,.5,false).onMs>0);
     check("nonnegative amplitude",far.amplitude>=0);
+    check("bubble level permits beep",BeepPattern.allowedMode(0));
+    check("inclinometer must be silent",!BeepPattern.allowedMode(1));
+    check("protractor must be silent",!BeepPattern.allowedMode(2));
+    check("square must be silent",!BeepPattern.allowedMode(3));
+    check("invalid mode must be silent",!BeepPattern.allowedMode(-1));
     System.out.println("TrazYar BeepPattern tests passed: "+count);
   }
 }
