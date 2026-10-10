@@ -83,7 +83,7 @@ public class MainActivity extends Activity implements SensorEventListener {
     }
     handler.post(new Runnable(){public void run() {
       long now=SystemClock.elapsedRealtime();
-      if(resumed&&measuring&&observed&&now-lastReading>3000){
+      if(resumed&&measuring&&!readingFrozen&&observed&&now-lastReading>3000){
         observed=false;state=-1;status.setText("ارتباط حسگر قطع شده");
         sensorStatus.setText("حسگر: دادهٔ جدیدی دریافت نمی‌شود");refreshBeep();
       }
