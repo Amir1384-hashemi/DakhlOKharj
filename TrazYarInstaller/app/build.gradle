@@ -6,8 +6,15 @@ android {
     applicationId 'com.trazyar.level'
     minSdk 26
     targetSdk 34
-    versionCode 19
-    versionName '3.2'
+    versionCode 20
+    versionName '4.0'
+  }
+  buildTypes {
+    release {
+      minifyEnabled false
+      // Intentionally unsigned by CI. Sign locally with the owner's PRIVATE key.
+      // Never commit a keystore or a signing password to source control.
+    }
   }
   compileOptions {
     sourceCompatibility JavaVersion.VERSION_17

@@ -123,6 +123,19 @@ public class MainActivity extends Activity implements SensorEventListener {
     appIntro.setBackground(background(PANEL,0xff376D50,13));
     root.addView(appIntro);
     gap(root,9);
+    Button privacyButton=button("🔒 دربارهٔ نسخهٔ پولی و حریم خصوصی",false);
+    privacyButton.setTextSize(13);
+    root.addView(privacyButton,new LinearLayout.LayoutParams(-1,px(47)));
+    privacyButton.setOnClickListener(v->new AlertDialog.Builder(this)
+      .setTitle("تراز یار حرفه‌ای • حریم خصوصی")
+      .setMessage("نسخهٔ پولی یک‌بار از مایکت یا بازار خریداری می‌شود و تمام ابزارها بدون پرداخت اضافه فعال‌اند. "+
+        "برنامه آفلاین است، اینترنت و ورود به حساب کاربری لازم ندارد و تبلیغ یا تحلیل‌گر رفتاری ندارد. "+
+        "اندازه‌گیری‌ها، نام پروژه‌ها و کالیبراسیون فقط در حافظهٔ خصوصی همین گوشی ذخیره می‌شوند. "+
+        "اشتراک گزارش تنها با انتخاب شما و از طریق برنامهٔ مقصد انجام می‌شود. "+
+        "با پاک‌کردن داده‌های برنامه، دفترچه و تنظیمات حذف می‌شوند. "+
+        "برای کارهای حساس، دقت حسگر را با ابزار مرجع کنترل کنید.")
+      .setPositiveButton("متوجه شدم",null).show());
+    gap(root,9);
     Button guideEntry=button("📚 معرفی برنامه و مرکز آموزش کامل",false);
     guideEntry.setTextSize(16);
     root.addView(guideEntry,new LinearLayout.LayoutParams(-1,px(56)));
@@ -319,7 +332,7 @@ public class MainActivity extends Activity implements SensorEventListener {
         refreshBeep();
       }).show());
     gap(root,12);root.addView(text("زاویه‌سنج و گونیا: گوشی را با صفحهٔ قائم نگه دارید. در گونیا، ضلع اول را ثبت کنید و برای ضلع دوم، گوشی را در همان صفحه بچرخانید. چرخش روی میز افقی با حسگر گرانش اندازه‌گیری نمی‌شود.",12,MUTED));
-    gap(root,12);root.addView(text("تراز یار • نسخهٔ ۳٫۲ • گزارش کامل + بررسی ذخیره‌ها",11,GOLD));
+    gap(root,12);root.addView(text("تراز یار • نسخهٔ ۴٫۰ • انتشار پولی ویژهٔ بازار و مایکت",11,GOLD));
   }
   void openTutorial(int firstPage){
     if(tutorialOpen)return;

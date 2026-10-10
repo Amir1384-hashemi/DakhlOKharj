@@ -209,7 +209,7 @@ public final class InstallerActivity extends Activity implements SensorEventList
     reset.setOnClickListener(v->confirmReset());
     sharePanel.addView(text("این محاسبات فقط روی سطح صلب و تخت و با هم‌راستایی گوشی معتبرترند. تاب سطح، لق‌بودن بدنه و مقدار واقعی چرخش پیچ هر پایه با حسگر گوشی سنجیده نمی‌شوند؛ برای نصب حساس با تراز مرجع کنترل کنید.",12,MUTED));
     gap(root,18);
-    root.addView(text("تراز یار ۳٫۲ • گزارش کامل و بررسی ذخیره‌ها",12,GOLD));
+    root.addView(text("تراز یار ۴٫۰ • نسخهٔ کامل پولی و آفلاین",12,GOLD));
     if(sensor==null){
       liveLabel.setText("این گوشی حسگر گرانش/شتاب‌سنج قابل استفاده ندارد.");
       beforeBtn.setEnabled(false);afterBtn.setEnabled(false);

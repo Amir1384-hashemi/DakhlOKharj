@@ -75,12 +75,23 @@ jobs:
           disable-animations: true
           emulator-boot-timeout: 600
           script: python3 TrazYarInstaller/verification/emulator_smoke.py
-      - name: Publish downloadable APK on isolated branch
+      - name: Build unsigned release APK for private owner signing
+        working-directory: TrazYarInstaller
+        run: gradle --no-daemon :app:assembleRelease
+      - name: Inspect production APK metadata and privacy permissions
+        run: python3 TrazYarInstaller/verification/release_audit.py
+      - name: Package unsigned release and Android signing utility
         run: |
-          cp TrazYarInstaller/app/build/outputs/apk/debug/app-debug.apk TrazYar_Samsung_v3_2_VerifiedInstall.apk
-          test -s TrazYar_Samsung_v3_2_VerifiedInstall.apk
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -f TrazYar_Samsung_v3_2_VerifiedInstall.apk
-          git commit -m "Publish installable TrazYar 3.2 full installer and diary verified APK [skip ci]"
-          git push origin HEAD:trazyar-direct-install
+          mkdir -p /tmp/trazyar-release
+          cp TrazYarInstaller/app/build/outputs/apk/release/app-release-unsigned.apk /tmp/trazyar-release/TrazYar_v4_0_Release_UNSIGNED.apk
+          test -s /tmp/trazyar-release/TrazYar_v4_0_Release_UNSIGNED.apk
+          test -s "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar"
+          cp "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar" /tmp/trazyar-release/apksigner.jar
+          cp TrazYarInstaller/STORE_RELEASE_CHECKLIST_FA.md /tmp/trazyar-release/STORE_RELEASE_CHECKLIST_FA.md
+          cp TrazYarInstaller/PRIVACY_POLICY_FA.md /tmp/trazyar-release/PRIVACY_POLICY_FA.md
+          cp TrazYarInstaller/STORE_LISTING_FA.md /tmp/trazyar-release/STORE_LISTING_FA.md
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TrazYar-v4-unsigned-release-private-signing
+          path: /tmp/trazyar-release/
+          retention-days: 5
