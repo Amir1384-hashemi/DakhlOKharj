@@ -91,7 +91,7 @@ def tap_scrolling(fragment, delay=1, max_swipes=12):
             label=n.get("text","") or n.get("content-desc","")
             if fragment not in label or n.get("clickable")!="true":
                 continue
-            coords=re.findall(r"\\d+",n.get("bounds",""))
+            coords=re.findall(r"\d+",n.get("bounds",""))
             if len(coords)!=4:
                 continue
             a,b,c,d=map(int,coords)
