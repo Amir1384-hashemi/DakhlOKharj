@@ -285,6 +285,13 @@ public final class InstallerActivity extends Activity implements SensorEventList
       prefs.getFloat("calibrationZeroY",0):0);
   }
   InstallerMath.Result read(){
+    // A scripted emulator click takes several seconds; in debuggable-only
+    // smoke mode, the known synthetic sample is intentionally held fresh.
+    // Normal measurement still rejects real sensor samples older than 1.8 s.
+    if(uiSmokeMode&&observed){
+      long now=SystemClock.elapsedRealtime();
+      lastSample=now;firstSample=now-4000;lastMovement=now-4000;
+    }
     if(!observed||!ready||SystemClock.elapsedRealtime()-lastSample>1800)
       throw new IllegalArgumentException("اطلاعات حسگر تازه نیست. گوشی را روی وسیله قرار دهید.");
     if(SystemClock.elapsedRealtime()-firstSample<900||
