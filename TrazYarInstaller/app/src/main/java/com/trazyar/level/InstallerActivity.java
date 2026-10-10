@@ -114,6 +114,12 @@ public final class InstallerActivity extends Activity implements SensorEventList
     Button back=button("‹ برگشت به تراز یار",false);
     root.addView(back,new LinearLayout.LayoutParams(-1,dp(48)));
     back.setOnClickListener(v->finish());
+    gap(root,8);
+    Button installGuide=button("📚 آموزش تصویری نصاب‌یار + راهنمای گزارش",false);
+    installGuide.setTextSize(15);
+    root.addView(installGuide,new LinearLayout.LayoutParams(-1,dp(53)));
+    installGuide.setOnClickListener(v->startActivity(
+      new Intent(this,GuideCenterActivity.class).putExtra("guide_topic",GuideContent.INSTALLER)));
     gap(root,10);
     TextView heading=text("▣ نصاب‌یار حرفه‌ای",27,ACCENT);
     heading.setTypeface(null,Typeface.BOLD);root.addView(heading);
@@ -182,7 +188,7 @@ public final class InstallerActivity extends Activity implements SensorEventList
     reset.setOnClickListener(v->confirmReset());
     sharePanel.addView(text("این محاسبات فقط روی سطح صلب و تخت و با هم‌راستایی گوشی معتبرترند. تاب سطح، لق‌بودن بدنه و مقدار واقعی چرخش پیچ هر پایه با حسگر گوشی سنجیده نمی‌شوند؛ برای نصب حساس با تراز مرجع کنترل کنید.",12,MUTED));
     gap(root,18);
-    root.addView(text("تراز یار ۲٫۹ • بدون اینترنت • بوق فقط در تراز حبابی",12,GOLD));
+    root.addView(text("تراز یار ۳٫۰ • بدون اینترنت • بوق فقط در تراز حبابی",12,GOLD));
     if(sensor==null){
       liveLabel.setText("این گوشی حسگر گرانش/شتاب‌سنج قابل استفاده ندارد.");
       beforeBtn.setEnabled(false);afterBtn.setEnabled(false);

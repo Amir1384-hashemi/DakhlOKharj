@@ -75,11 +75,19 @@ public class MainActivity extends Activity implements SensorEventListener {
     buildUI();
     if(sensor==null){start.setEnabled(false);status.setText("حسگر مناسب پیدا نشد");sensorStatus.setText("این گوشی حسگر شتاب/گرانش مورد نیاز را ندارد.");}
     else startMeasure(); // Begin sensor measurement automatically; tool tabs remain one-tap.
-    if(!prefs.getBoolean("tutorialSeenV27",false)){
-      prefs.edit().putBoolean("tutorialSeenV27",true).apply();
+    if(getIntent()!=null){
+      int fromGuide=getIntent().getIntExtra("guide_tool",-1);
+      if(fromGuide>=0&&fromGuide<4)selectMode(fromGuide);
+      else if(getIntent().getBooleanExtra("guide_journal",false))
+        handler.postDelayed(()->showHistory(),350);
+    }
+    // The app introduction is shown once after this release, not at every launch.
+    if(!prefs.getBoolean("guideIntroSeenV30",false)){
+      prefs.edit().putBoolean("guideIntroSeenV30",true).apply();
       handler.postDelayed(()->{
-        if(!isFinishing()&&!isDestroyed())openTutorial(0);
-      },750);
+        if(!isFinishing()&&!isDestroyed())
+          startActivity(new Intent(this,GuideCenterActivity.class).putExtra("guide_topic",GuideContent.INTRO));
+      },850);
     }
     handler.post(new Runnable(){public void run() {
       long now=SystemClock.elapsedRealtime();
@@ -90,20 +98,38 @@ public class MainActivity extends Activity implements SensorEventListener {
       handler.postDelayed(this,500);
     }});
   }
+  @Override protected void onNewIntent(Intent incoming){
+    super.onNewIntent(incoming);
+    setIntent(incoming);
+    int tool=incoming.getIntExtra("guide_tool",-1);
+    if(tool>=0&&tool<4)selectMode(tool);
+    else if(incoming.getBooleanExtra("guide_journal",false))
+      handler.postDelayed(()->showHistory(),300);
+  }
   void buildUI(){
     ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);scroll.setBackgroundColor(BG);
     LinearLayout root=new LinearLayout(this);root.setOrientation(1);root.setPadding(px(16),px(18),px(16),px(30));root.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);scroll.addView(root);setContentView(scroll);
     TextView brand=text("◉   تراز یار",30,GREEN);brand.setTypeface(null,1);root.addView(brand);
-    root.addView(text("همیشه در سطح درست  •  TRAZYAR",12,GOLD));gap(root,10);
+    root.addView(text("همیشه در سطح درست  •  TRAZYAR",12,GOLD));gap(root,8);
+    TextView appIntro=text("تراز یار، دستیار فارسی و آفلاینِ ترازکردن، سنجش شیب و زاویه و راهنمای تنظیم پایه‌هاست. با چند لمس، از اندازه‌گیری به نتیجه و گزارش برسید.",13,TEXT);
+    appIntro.setPadding(px(9),px(12),px(9),px(12));
+    appIntro.setBackground(background(PANEL,0xff376D50,13));
+    root.addView(appIntro);
+    gap(root,9);
+    Button guideEntry=button("📚 معرفی برنامه و مرکز آموزش کامل",false);
+    guideEntry.setTextSize(16);
+    root.addView(guideEntry,new LinearLayout.LayoutParams(-1,px(56)));
+    guideEntry.setOnClickListener(v->startActivity(new Intent(this,GuideCenterActivity.class)));
+    gap(root,12);
     Button installAssistant=button("▣ نصاب‌یار حرفه‌ای  •  تنظیم چهار پایه و گزارش",true);
     installAssistant.setTextSize(15);
     root.addView(installAssistant,new LinearLayout.LayoutParams(-1,px(64)));
     installAssistant.setOnClickListener(v->startActivity(new Intent(this,InstallerActivity.class)));
     TextView installerHint=text("اندازهٔ دقیق وسیله را بدهید؛ چهار گوشه، راهنمای نصب و گزارش قبل/بعد بگیرید.",12,MUTED);
     root.addView(installerHint);gap(root,12);
-    Button helpButton=button("📖 آموزش استفاده از چهار ابزار",false);
+    Button helpButton=button("📖 فهرست آموزش همهٔ بخش‌های برنامه",false);
     root.addView(helpButton,new LinearLayout.LayoutParams(-1,px(52)));
-    helpButton.setOnClickListener(v->openTutorial(0));
+    helpButton.setOnClickListener(v->startActivity(new Intent(this,GuideCenterActivity.class)));
     gap(root,9);
     TextView quickHelpTitle=text("آموزش مستقیم ابزارها",16,GOLD);
     quickHelpTitle.setTypeface(null,1);
@@ -124,7 +150,8 @@ public class MainActivity extends Activity implements SensorEventListener {
         LinearLayout.LayoutParams hparams=new LinearLayout.LayoutParams(0,px(45),1);
         hparams.setMargins(px(3),px(2),px(3),px(2));
         shortcutRow.addView(shortcut,hparams);
-        shortcut.setOnClickListener(v->openTutorial(TutorialContent.pageForTool(tool)));
+        shortcut.setOnClickListener(v->startActivity(
+          new Intent(this,GuideCenterActivity.class).putExtra("guide_topic",GuideContent.forTool(tool))));
       }
     }
     gap(root,13);
@@ -280,7 +307,7 @@ public class MainActivity extends Activity implements SensorEventListener {
         refreshBeep();
       }).show());
     gap(root,12);root.addView(text("زاویه‌سنج و گونیا: گوشی را با صفحهٔ قائم نگه دارید. در گونیا، ضلع اول را ثبت کنید و برای ضلع دوم، گوشی را در همان صفحه بچرخانید. چرخش روی میز افقی با حسگر گرانش اندازه‌گیری نمی‌شود.",12,MUTED));
-    gap(root,12);root.addView(text("تراز یار • نسخهٔ ۲٫۹ • نصاب‌یار چهارپایه و گزارش قبل/بعد",11,GOLD));
+    gap(root,12);root.addView(text("تراز یار • نسخهٔ ۳٫۰ • آموزش جامع و معرفی برنامه",11,GOLD));
   }
   void openTutorial(int firstPage){
     if(tutorialOpen)return;
