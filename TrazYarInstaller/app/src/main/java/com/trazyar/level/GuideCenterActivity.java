@@ -82,6 +82,10 @@ public final class GuideCenterActivity extends Activity {
       .setItems(GuideContent.TITLES,(d,which)->showTopic(which))
       .setNegativeButton("بستن",null).show());
 
+    Button byProject=button("🎯 راهنمای انتخاب ابزار بر اساس نوع کار",false);
+    root.addView(byProject,new LinearLayout.LayoutParams(-1,dp(45)));
+    byProject.setOnClickListener(v->startActivity(new Intent(this,ProjectCoachActivity.class)));
+
     LinearLayout fast=new LinearLayout(this);
     fast.setOrientation(LinearLayout.HORIZONTAL);
     fast.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);

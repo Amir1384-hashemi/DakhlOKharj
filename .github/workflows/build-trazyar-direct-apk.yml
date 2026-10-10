@@ -49,6 +49,11 @@ jobs:
           mkdir -p /tmp/trazyar-guide-test
           javac -encoding UTF-8 -d /tmp/trazyar-guide-test TrazYarInstaller/app/src/main/java/com/trazyar/level/GuideContent.java TrazYarInstaller/verification/GuideContentTest.java
           java -cp /tmp/trazyar-guide-test com.trazyar.level.GuideContentTest
+      - name: Verify six real-life project walkthroughs
+        run: |
+          mkdir -p /tmp/trazyar-project-tests
+          javac -encoding UTF-8 -d /tmp/trazyar-project-tests TrazYarInstaller/app/src/main/java/com/trazyar/level/GuideContent.java TrazYarInstaller/app/src/main/java/com/trazyar/level/ProjectCoachContent.java TrazYarInstaller/verification/ProjectCoachContentTest.java
+          java -cp /tmp/trazyar-project-tests com.trazyar.level.ProjectCoachContentTest
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
@@ -57,10 +62,10 @@ jobs:
         run: gradle --no-daemon :app:assembleDebug
       - name: Publish downloadable APK on isolated branch
         run: |
-          cp TrazYarInstaller/app/build/outputs/apk/debug/app-debug.apk TrazYar_Samsung_v3_0_GuideCenter.apk
-          test -s TrazYar_Samsung_v3_0_GuideCenter.apk
+          cp TrazYarInstaller/app/build/outputs/apk/debug/app-debug.apk TrazYar_Samsung_v3_1_ProjectCoach.apk
+          test -s TrazYar_Samsung_v3_1_ProjectCoach.apk
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -f TrazYar_Samsung_v3_0_GuideCenter.apk
-          git commit -m "Publish installable TrazYar 3.0 Persian training center and app introduction APK [skip ci]"
+          git add -f TrazYar_Samsung_v3_1_ProjectCoach.apk
+          git commit -m "Publish installable TrazYar 3.1 task-based guided learning assistant APK [skip ci]"
           git push origin HEAD:trazyar-direct-install

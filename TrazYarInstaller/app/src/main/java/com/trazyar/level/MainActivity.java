@@ -120,6 +120,11 @@ public class MainActivity extends Activity implements SensorEventListener {
     guideEntry.setTextSize(16);
     root.addView(guideEntry,new LinearLayout.LayoutParams(-1,px(56)));
     guideEntry.setOnClickListener(v->startActivity(new Intent(this,GuideCenterActivity.class)));
+    gap(root,9);
+    Button projectCoach=button("🎯 از نوع کارتان شروع کنید • راهنمای پروژه‌محور",true);
+    projectCoach.setTextSize(15);
+    root.addView(projectCoach,new LinearLayout.LayoutParams(-1,px(56)));
+    projectCoach.setOnClickListener(v->startActivity(new Intent(this,ProjectCoachActivity.class)));
     gap(root,12);
     Button installAssistant=button("▣ نصاب‌یار حرفه‌ای  •  تنظیم چهار پایه و گزارش",true);
     installAssistant.setTextSize(15);
@@ -307,7 +312,7 @@ public class MainActivity extends Activity implements SensorEventListener {
         refreshBeep();
       }).show());
     gap(root,12);root.addView(text("زاویه‌سنج و گونیا: گوشی را با صفحهٔ قائم نگه دارید. در گونیا، ضلع اول را ثبت کنید و برای ضلع دوم، گوشی را در همان صفحه بچرخانید. چرخش روی میز افقی با حسگر گرانش اندازه‌گیری نمی‌شود.",12,MUTED));
-    gap(root,12);root.addView(text("تراز یار • نسخهٔ ۳٫۰ • آموزش جامع و معرفی برنامه",11,GOLD));
+    gap(root,12);root.addView(text("تراز یار • نسخهٔ ۳٫۱ • آموزش پروژه‌محور + معرفی کامل",11,GOLD));
   }
   void openTutorial(int firstPage){
     if(tutorialOpen)return;
