@@ -140,12 +140,12 @@ def main():
     for phrase in ["ماشین لباس‌شویی","کابینت یا میز","قفسه و شلف",
                    "در یا ستون","زاویهٔ ۹۰","رمپ یا مسیر آب"]:
         tap(phrase,0.55)
-        verify("مرحله ۱ از","project selection "+phrase)
+        verify("مرحله 1 از","project selection "+phrase)
     tap("ماشین لباس‌شویی",0.5)
     tap("انجام شد، بعدی",0.55)
-    verify("مرحله ۲ از","next project step")
+    verify("مرحله 2 از","next project step")
     tap("مرحله قبل",0.55)
-    verify("مرحله ۱ از","previous project step")
+    verify("مرحله 1 از","previous project step")
     tap("ورود مستقیم به نصاب‌یار",0.9)
     verify("نصاب‌یار حرفه‌ای","installer assistant opens")
     verify_scrolling("ثبت وضعیت قبل","installer before measurement action")
@@ -174,6 +174,17 @@ def main():
     tap("نصاب‌یار")
     verify("چهار پایه","four-corner estimate guide")
     back()
+    # Final real-time launch without test-only sensor suppression:
+    # inspect stability while the app starts its normal sensor and audio backend.
+    adb("shell","am","force-stop",PKG)
+    adb("shell","pm","clear",PKG)
+    adb("shell","am","start","-W","-n",PKG+"/.MainActivity",timeout=35)
+    time.sleep(4)
+    live_pid=adb("shell","pidof",PKG,check=False)
+    if not live_pid.strip():
+        raise AssertionError("normal live-sensor launch terminated")
+    PASSED.append("normal launch with sensors/audio loop enabled (crash check)")
+    print("PASS: normal launch with sensors/audio loop enabled",flush=True)
     # verify app remains alive and no fatal exceptions
     ps=adb("shell","pidof",PKG,check=False)
     if not ps.strip():
