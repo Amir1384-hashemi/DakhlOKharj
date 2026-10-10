@@ -26,20 +26,28 @@ def adb(*args, **kwargs):
 
 def snapshot():
     last_error = ""
-    for attempt in range(3):
+    # On slower boots UIAutomator can run before userdata mounts or the
+    # accessibility service is fully initialized. Retry and use /data/local/tmp.
+    location = "/data/local/tmp/trazyar_ui.xml"
+    for attempt in range(8):
         try:
-            adb("shell", "uiautomator", "dump", "/sdcard/trazyar_ui.xml", timeout=65)
-            raw = adb("exec-out", "cat", "/sdcard/trazyar_ui.xml", timeout=20)
+            adb("shell", "rm", "-f", location, timeout=12)
+            output = adb("shell", "uiautomator", "dump", location, timeout=65)
+            raw = adb("exec-out", "cat", location, timeout=20)
             start = raw.find("<?xml")
             if start < 0:
                 start = raw.find("<hierarchy")
             if start < 0:
-                raise RuntimeError("hierarchy absent: " + raw[:300])
+                raise RuntimeError("not written; dump said: " + output[:240]
+                    + " read: " + raw[:180])
             tree = ET.fromstring(raw[start:])
             return [n.attrib for n in tree.iter("node")]
         except Exception as e:
             last_error = str(e)
-            time.sleep(1)
+            print("UI inspection retry", attempt+1, ":", last_error[:200],flush=True)
+            adb("shell","input","keyevent","KEYCODE_WAKEUP",check=False)
+            adb("shell","input","keyevent","82",check=False)
+            time.sleep(2)
     raise RuntimeError("Could not inspect native Android UI: " + last_error)
 
 def described(nodes):
@@ -99,8 +107,12 @@ def main():
     adb("install","-r",APK,timeout=100)
     adb("shell","pm","clear",PKG)
     adb("logcat","-c")
+    # ADB reports boot completed before the launcher and accessibility APIs are
+    # always ready, especially without an AVD snapshot.
+    adb("shell","input","keyevent","KEYCODE_WAKEUP",check=False)
+    adb("shell","input","keyevent","82",check=False)
     adb("shell","am","start","-W","-n",PKG+"/.MainActivity",timeout=35)
-    time.sleep(2.7)
+    time.sleep(6.5)
     verify("مرکز آموزش", "first-run introduction and training center")
     verify("معرفی تراز یار","offline app introduction")
     tap("فهرست ۱۲ موضوع")
