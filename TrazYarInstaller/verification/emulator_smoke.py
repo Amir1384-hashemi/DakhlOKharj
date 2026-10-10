@@ -82,16 +82,28 @@ def verify_scrolling(fragment, note=None, max_swipes=5):
         time.sleep(.6)
     raise AssertionError("Could not find after scrolling: "+fragment)
 
-def tap_scrolling(fragment, delay=1, max_swipes=9):
+def tap_scrolling(fragment, delay=1, max_swipes=12):
+    # UIAutomator may return an offscreen TextView with zero-height bounds.
+    # Only tap an actually visible CLICKABLE element, scrolling otherwise.
     for attempt in range(max_swipes+1):
         nodes=snapshot()
-        if any(fragment in n.get("text","") or fragment in n.get("content-desc","")
-               for n in nodes):
-            tap(fragment,delay)
+        for n in nodes:
+            label=n.get("text","") or n.get("content-desc","")
+            if fragment not in label or n.get("clickable")!="true":
+                continue
+            coords=re.findall(r"\\d+",n.get("bounds",""))
+            if len(coords)!=4:
+                continue
+            a,b,c,d=map(int,coords)
+            if c<=a+9 or d<=b+9:
+                continue
+            print("TAP SCROLL:",fragment,"at",((a+c)//2,(b+d)//2),flush=True)
+            adb("shell","input","tap",str((a+c)//2),str((b+d)//2))
+            time.sleep(delay)
             return
-        adb("shell","input","swipe","500","1450","500","450","390")
-        time.sleep(.5)
-    raise AssertionError("Cannot tap after scrolling: "+fragment)
+        adb("shell","input","swipe","500","1470","500","430","350")
+        time.sleep(.6)
+    raise AssertionError("Cannot tap a visible button after scrolling: "+fragment)
 
 def tap(fragment, delay=1.0):
     nodes = snapshot()
