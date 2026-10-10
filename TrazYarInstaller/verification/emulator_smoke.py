@@ -111,7 +111,9 @@ def main():
     # always ready, especially without an AVD snapshot.
     adb("shell","input","keyevent","KEYCODE_WAKEUP",check=False)
     adb("shell","input","keyevent","82",check=False)
-    adb("shell","am","start","-W","-n",PKG+"/.MainActivity",timeout=35)
+    # This explicit flag only affects debuggable APKs and prevents continuous UI updates.
+    adb("shell","am","start","-W","-n",PKG+"/.MainActivity",
+        "--ez","smoke_ui_verification","true",timeout=35)
     time.sleep(6.5)
     verify("مرکز آموزش", "first-run introduction and training center")
     verify("معرفی تراز یار","offline app introduction")

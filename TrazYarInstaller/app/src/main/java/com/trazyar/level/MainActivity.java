@@ -33,6 +33,8 @@ public class MainActivity extends Activity implements SensorEventListener {
   final BeepEngine beeper=new BeepEngine();
   boolean measuring=false,resumed=false,observed=false,lowpassInit=false;
   boolean haptic=true,beepEnabled=true,nearArmed=true,tutorialOpen=false,readingFrozen=false,calibrationComplete=false;
+  // CI-only UI harness mode: no continuous sensor-driven invalidation while UIAutomator inspects views.
+  boolean uiSmokeMode=false;
   int calibrationStage=0;
   double firstCalX=0,firstCalY=0;
   long firstCalAt=0;
@@ -61,6 +63,11 @@ public class MainActivity extends Activity implements SensorEventListener {
   @Override public void onCreate(Bundle b) {
     super.onCreate(b); getWindow().setStatusBarColor(BG);getWindow().setNavigationBarColor(BG);
     prefs=getSharedPreferences("trazyar",MODE_PRIVATE);
+    boolean debugBuild=(getApplicationInfo().flags&android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE)!=0;
+    if(debugBuild && getIntent()!=null && getIntent().getBooleanExtra("smoke_ui_verification",false)){
+      prefs.edit().putBoolean("smokeUiModeForVerification",true).apply();
+    }
+    uiSmokeMode=debugBuild&&prefs.getBoolean("smokeUiModeForVerification",false);
     tolerance=prefs.getFloat("tol",.5f);
     measurementMode=Math.max(0,Math.min(3,prefs.getInt("measurementMode",0)));
     haptic=prefs.getBoolean("haptic",true);
@@ -74,7 +81,7 @@ public class MainActivity extends Activity implements SensorEventListener {
     if(manager!=null){sensor=manager.getDefaultSensor(Sensor.TYPE_GRAVITY);if(sensor==null)sensor=manager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);}
     buildUI();
     if(sensor==null){start.setEnabled(false);status.setText("حسگر مناسب پیدا نشد");sensorStatus.setText("این گوشی حسگر شتاب/گرانش مورد نیاز را ندارد.");}
-    else startMeasure(); // Begin sensor measurement automatically; tool tabs remain one-tap.
+    else if(!uiSmokeMode)startMeasure(); // Normal user launches begin sensor measurement automatically.
     if(getIntent()!=null){
       int fromGuide=getIntent().getIntExtra("guide_tool",-1);
       if(fromGuide>=0&&fromGuide<4)selectMode(fromGuide);
@@ -561,7 +568,7 @@ public class MainActivity extends Activity implements SensorEventListener {
       calibrationStage=0;
       updateCalibrationLabel();
     }
-    if(sensor!=null&&!measuring)startMeasure();
+    if(sensor!=null&&!measuring&&!uiSmokeMode)startMeasure();
     updateModeUI();refreshBeep();
     Toast.makeText(this,new String[]{"تراز حبابی","شیب‌سنج فعال شد","زاویه‌سنج فعال شد","گونیا فعال شد"}[mode],Toast.LENGTH_SHORT).show();
   }

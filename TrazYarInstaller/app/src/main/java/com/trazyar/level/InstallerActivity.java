@@ -38,7 +38,7 @@ public final class InstallerActivity extends Activity implements SensorEventList
   SensorManager manager;
   Sensor sensor;
   SharedPreferences prefs;
-  boolean observed=false,ready=false,smoothing=false;
+  boolean observed=false,ready=false,smoothing=false,uiSmokeMode=false;
   final float[] gravity=new float[3];
   double rawX=0,rawY=0;
   long lastSample=0,lastMovement=0,firstSample=0;
@@ -75,6 +75,8 @@ public final class InstallerActivity extends Activity implements SensorEventList
     super.onCreate(b);
     getWindow().setStatusBarColor(BG);getWindow().setNavigationBarColor(BG);
     prefs=getSharedPreferences(PREFS,MODE_PRIVATE);
+    uiSmokeMode=(getApplicationInfo().flags&android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE)!=0
+      &&prefs.getBoolean("smokeUiModeForVerification",false);
     manager=(SensorManager)getSystemService(Context.SENSOR_SERVICE);
     if(manager!=null){
       sensor=manager.getDefaultSensor(Sensor.TYPE_GRAVITY);
@@ -230,7 +232,7 @@ public final class InstallerActivity extends Activity implements SensorEventList
   @Override protected void onResume(){
     super.onResume();getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
     ready=true;observed=false;smoothing=false;firstSample=0;
-    if(manager!=null&&sensor!=null)manager.registerListener(this,sensor,SensorManager.SENSOR_DELAY_UI);
+    if(manager!=null&&sensor!=null&&!uiSmokeMode)manager.registerListener(this,sensor,SensorManager.SENSOR_DELAY_UI);
   }
   @Override protected void onPause(){
     ready=false;
