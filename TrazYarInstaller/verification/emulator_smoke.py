@@ -63,6 +63,17 @@ def verify(fragment, note=None):
     PASSED.append(note or fragment)
     print("PASS:", note or fragment, flush=True)
 
+def verify_scrolling(fragment, note=None, max_swipes=5):
+    for attempt in range(max_swipes+1):
+        nodes = snapshot()
+        if any(fragment in n.get("text","") or fragment in n.get("content-desc","") for n in nodes):
+            PASSED.append(note or fragment)
+            print("PASS:",note or fragment,flush=True)
+            return
+        adb("shell","input","swipe","500","1350","500","450","370")
+        time.sleep(.6)
+    raise AssertionError("Could not find after scrolling: "+fragment)
+
 def tap(fragment, delay=1.0):
     nodes = snapshot()
     n = node_with(fragment, nodes)
@@ -95,7 +106,9 @@ def main():
     back()
     tap("گونیا")
     verify("۹۰ درجه","illustrated square training chapter")
-    back()
+    # Android BACK can dismiss an overlay without leaving the help activity.
+    # Use the explicit, accessible navigation control instead.
+    tap("بازگشت به برنامه")
     verify("از نوع کارتان شروع کنید","home project based help")
     tap("از نوع کارتان شروع کنید")
     verify("راهنمای انجام کار","project-based learning screen")
@@ -110,7 +123,7 @@ def main():
     verify("مرحله ۱ از","previous project step")
     tap("ورود مستقیم به نصاب‌یار",0.9)
     verify("نصاب‌یار حرفه‌ای","installer assistant opens")
-    verify("ثبت وضعیت قبل","installer before measurement action")
+    verify_scrolling("ثبت وضعیت قبل","installer before measurement action")
     back()
     verify("راهنمای انجام کار","return to walkthrough")
     back()
@@ -131,7 +144,7 @@ def main():
         print("PASS: tool navigation",label,flush=True)
     tap("معرفی برنامه و مرکز آموزش")
     tap("فهرست ۱۲ موضوع")
-    verify("قفل عدد و دفترچه","journal and freeze documentation")
+    verify_scrolling("قفل عدد و دفترچه","journal and freeze documentation")
     back()
     tap("نصاب‌یار")
     verify("چهار پایه","four-corner estimate guide")
