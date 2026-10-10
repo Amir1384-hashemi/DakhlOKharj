@@ -319,7 +319,7 @@ public class MainActivity extends Activity implements SensorEventListener {
         refreshBeep();
       }).show());
     gap(root,12);root.addView(text("زاویه‌سنج و گونیا: گوشی را با صفحهٔ قائم نگه دارید. در گونیا، ضلع اول را ثبت کنید و برای ضلع دوم، گوشی را در همان صفحه بچرخانید. چرخش روی میز افقی با حسگر گرانش اندازه‌گیری نمی‌شود.",12,MUTED));
-    gap(root,12);root.addView(text("تراز یار • نسخهٔ ۳٫۱ • آموزش پروژه‌محور + معرفی کامل",11,GOLD));
+    gap(root,12);root.addView(text("تراز یار • نسخهٔ ۳٫۲ • گزارش کامل + بررسی ذخیره‌ها",11,GOLD));
   }
   void openTutorial(int firstPage){
     if(tutorialOpen)return;

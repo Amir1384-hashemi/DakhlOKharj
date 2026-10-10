@@ -82,6 +82,17 @@ def verify_scrolling(fragment, note=None, max_swipes=5):
         time.sleep(.6)
     raise AssertionError("Could not find after scrolling: "+fragment)
 
+def tap_scrolling(fragment, delay=1, max_swipes=9):
+    for attempt in range(max_swipes+1):
+        nodes=snapshot()
+        if any(fragment in n.get("text","") or fragment in n.get("content-desc","")
+               for n in nodes):
+            tap(fragment,delay)
+            return
+        adb("shell","input","swipe","500","1450","500","450","390")
+        time.sleep(.5)
+    raise AssertionError("Cannot tap after scrolling: "+fragment)
+
 def tap(fragment, delay=1.0):
     nodes = snapshot()
     n = node_with(fragment, nodes)
@@ -149,8 +160,31 @@ def main():
     tap("ورود مستقیم به نصاب‌یار",0.9)
     verify("نصاب‌یار حرفه‌ای","installer assistant opens")
     verify_scrolling("ثبت وضعیت قبل","installer before measurement action")
+    tap_scrolling("آزمون: نمونه سنسور قبل")
+    tap_scrolling("ثبت وضعیت قبل",1.3)
+    verify_scrolling("پیشنهاد تنظیم هر پایه","four foot correction estimates rendered")
+    tap_scrolling("آزمون: نمونه سنسور بعد")
+    tap_scrolling("ثبت وضعیت بعد",1)
+    verify("اندازه‌گیری بعد ثبت شد","second measurement captured")
+    tap("بسیار خوب")
+    verify_scrolling("بعد: X=","after-result user interface")
+    tap_scrolling("پیش‌نمایش متن کامل گزارش",.8)
+    verify("گزارش نصاب‌یار حرفه‌ای","readable report dialog")
+    back()
+    tap_scrolling("ثبت در دفترچه",1.2)
+    settings=adb("shell","run-as",PKG,"cat","shared_prefs/trazyar.xml",timeout=20)
+    for item in ["measurementJournalV28","installerV29_beforeValid",
+                 "installerV29_afterValid","نصاب‌یار چهارپایه"]:
+        if item not in settings:
+            raise AssertionError("Saved journal/installer state missing "+item)
+    PASSED.append("real installer before/after values persisted in app preferences")
+    print("PASS: installer before and after persisted + journal record",flush=True)
     back()
     verify("راهنمای انجام کار","return to walkthrough")
+    tap("ورود مستقیم به نصاب‌یار",.9)
+    verify_scrolling("بعد: X=","installer session restored after reopening")
+    back()
+    verify("راهنمای انجام کار","second return to walkthrough")
     back()
     verify("معرفی برنامه و مرکز آموزش", "main home returned")
     tap("معرفی برنامه و مرکز آموزش")

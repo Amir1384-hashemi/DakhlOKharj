@@ -152,6 +152,11 @@ public final class InstallerActivity extends Activity implements SensorEventList
     beforeBtn=button("۱. ثبت وضعیت قبل و محاسبهٔ چهار پایه",true);
     scan.addView(beforeBtn,new LinearLayout.LayoutParams(-1,dp(55)));
     beforeBtn.setOnClickListener(v->capture(false));
+    if(uiSmokeMode){
+      Button injectBefore=button("آزمون: نمونه سنسور قبل",false);
+      scan.addView(injectBefore,new LinearLayout.LayoutParams(-1,dp(43)));
+      injectBefore.setOnClickListener(v->injectSampleForUiTest(1.5,-0.9));
+    }
     gap(scan,9);
     suggestionText=text("مقادیر زیر بعد از ثبت «قبل از تنظیم» نمایش داده می‌شوند.",14,WHITE);
     scan.addView(suggestionText);
@@ -176,6 +181,11 @@ public final class InstallerActivity extends Activity implements SensorEventList
     afterBtn=button("۲. ثبت وضعیت بعد از تنظیم",true);
     finish.addView(afterBtn,new LinearLayout.LayoutParams(-1,dp(54)));
     afterBtn.setOnClickListener(v->capture(true));
+    if(uiSmokeMode){
+      Button injectAfter=button("آزمون: نمونه سنسور بعد",false);
+      finish.addView(injectAfter,new LinearLayout.LayoutParams(-1,dp(43)));
+      injectAfter.setOnClickListener(v->injectSampleForUiTest(0.18,-0.12));
+    }
     gap(finish,8);
     beforeText=text("قبل: ثبت نشده",14,WHITE);finish.addView(beforeText);
     afterText=text("بعد: ثبت نشده",14,WHITE);finish.addView(afterText);
@@ -188,6 +198,9 @@ public final class InstallerActivity extends Activity implements SensorEventList
     sharePanel.addView(report,new LinearLayout.LayoutParams(-1,dp(55)));
     shareBtn=report;
     shareBtn.setOnClickListener(v->shareReport());
+    Button previewReport=button("▤ پیش‌نمایش متن کامل گزارش",false);
+    sharePanel.addView(previewReport,new LinearLayout.LayoutParams(-1,dp(49)));
+    previewReport.setOnClickListener(v->previewReport());
     Button journal=button("▤ ثبت در دفترچهٔ تراز یار",false);
     sharePanel.addView(journal,new LinearLayout.LayoutParams(-1,dp(51)));
     journal.setOnClickListener(v->addToJournal());
@@ -196,7 +209,7 @@ public final class InstallerActivity extends Activity implements SensorEventList
     reset.setOnClickListener(v->confirmReset());
     sharePanel.addView(text("این محاسبات فقط روی سطح صلب و تخت و با هم‌راستایی گوشی معتبرترند. تاب سطح، لق‌بودن بدنه و مقدار واقعی چرخش پیچ هر پایه با حسگر گوشی سنجیده نمی‌شوند؛ برای نصب حساس با تراز مرجع کنترل کنید.",12,MUTED));
     gap(root,18);
-    root.addView(text("تراز یار ۳٫۱ • بدون اینترنت • بوق فقط در تراز حبابی",12,GOLD));
+    root.addView(text("تراز یار ۳٫۲ • گزارش کامل و بررسی ذخیره‌ها",12,GOLD));
     if(sensor==null){
       liveLabel.setText("این گوشی حسگر گرانش/شتاب‌سنج قابل استفاده ندارد.");
       beforeBtn.setEnabled(false);afterBtn.setEnabled(false);
@@ -280,6 +293,26 @@ public final class InstallerActivity extends Activity implements SensorEventList
     double width=InstallerMath.parseCentimeters(widthEdit.getText().toString());
     double depth=InstallerMath.parseCentimeters(depthEdit.getText().toString());
     return InstallerMath.compute(width,depth,adjustedX(),adjustedY());
+  }
+  /** UI instrumentation data for debuggable builds ONLY. Not reachable in a release APK. */
+  void injectSampleForUiTest(double testingX,double testingY){
+    if(!uiSmokeMode)return;
+    long now=SystemClock.elapsedRealtime();
+    rawX=testingX;rawY=testingY;
+    observed=true;ready=true;smoothing=true;
+    lastSample=now;firstSample=now-4000;lastMovement=now-4000;
+    if(liveLabel!=null)liveLabel.setText("حسگر نمونهٔ آزمون (دادهٔ ساختگی)");
+    if(stepLabel!=null)stepLabel.setText("✓ دادهٔ آزمایشی برای بررسی ذخیره و گزارش آماده است");
+  }
+  void previewReport(){
+    if(before==null){ToastMsg("ابتدا نتیجهٔ قبل را ثبت کنید.");return;}
+    String report=InstallerReport.build(
+      nameEdit.getText().toString().trim(),beforeAt,before,afterAt,after);
+    new AlertDialog.Builder(this)
+      .setTitle("پیش‌نمایش گزارش نصاب‌یار")
+      .setMessage(report)
+      .setPositiveButton("ارسال گزارش",(d,w)->shareReport())
+      .setNegativeButton("بستن",null).show();
   }
   void capture(boolean second){
     try{

@@ -77,10 +77,10 @@ jobs:
           script: python3 TrazYarInstaller/verification/emulator_smoke.py
       - name: Publish downloadable APK on isolated branch
         run: |
-          cp TrazYarInstaller/app/build/outputs/apk/debug/app-debug.apk TrazYar_Samsung_v3_1_ProjectCoach.apk
-          test -s TrazYar_Samsung_v3_1_ProjectCoach.apk
+          cp TrazYarInstaller/app/build/outputs/apk/debug/app-debug.apk TrazYar_Samsung_v3_2_VerifiedInstall.apk
+          test -s TrazYar_Samsung_v3_2_VerifiedInstall.apk
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -f TrazYar_Samsung_v3_1_ProjectCoach.apk
-          git commit -m "Publish installable TrazYar 3.1 task-based guided learning assistant APK [skip ci]"
+          git add -f TrazYar_Samsung_v3_2_VerifiedInstall.apk
+          git commit -m "Publish installable TrazYar 3.2 full installer and diary verified APK [skip ci]"
           git push origin HEAD:trazyar-direct-install
