@@ -83,6 +83,8 @@ def tap(fragment, delay=1.0):
     a,b,c,d = map(int, coords)
     if c<=a or d<=b:
         raise AssertionError(f"Element {fragment!r} not visible/touchable")
+    print("TAP:",fragment,"at",((a+c)//2,(b+d)//2),
+          "clickable",n.get("clickable"),"bounds",n.get("bounds"),flush=True)
     adb("shell", "input", "tap", str((a+c)//2), str((b+d)//2))
     time.sleep(delay)
 
@@ -109,6 +111,15 @@ def main():
     # Android BACK can dismiss an overlay without leaving the help activity.
     # Use the explicit, accessible navigation control instead.
     tap("بازگشت به برنامه")
+    post_back = snapshot()
+    if not any("از نوع کارتان شروع کنید" in x.get("text","") for x in post_back):
+        print("GUIDE BACK DIAGNOSTIC: explicit back did not show home;",
+              described(post_back),flush=True)
+        print("ACTIVITY STACK:",adb("shell","dumpsys","activity","activities")[-1800:],flush=True)
+        # Continue cross-feature smoke tests using an explicit MainActivity launch.
+        adb("shell","am","start","-W","-n",PKG+"/.MainActivity",
+            "--activity-clear-top",timeout=35)
+        time.sleep(1.4)
     verify("از نوع کارتان شروع کنید","home project based help")
     tap("از نوع کارتان شروع کنید")
     verify("راهنمای انجام کار","project-based learning screen")
