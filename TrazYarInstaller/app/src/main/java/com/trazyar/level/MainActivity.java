@@ -95,6 +95,12 @@ public class MainActivity extends Activity implements SensorEventListener {
     LinearLayout root=new LinearLayout(this);root.setOrientation(1);root.setPadding(px(16),px(18),px(16),px(30));root.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);scroll.addView(root);setContentView(scroll);
     TextView brand=text("◉   تراز یار",30,GREEN);brand.setTypeface(null,1);root.addView(brand);
     root.addView(text("همیشه در سطح درست  •  TRAZYAR",12,GOLD));gap(root,10);
+    Button installAssistant=button("▣ نصاب‌یار حرفه‌ای  •  تنظیم چهار پایه و گزارش",true);
+    installAssistant.setTextSize(15);
+    root.addView(installAssistant,new LinearLayout.LayoutParams(-1,px(64)));
+    installAssistant.setOnClickListener(v->startActivity(new Intent(this,InstallerActivity.class)));
+    TextView installerHint=text("اندازهٔ دقیق وسیله را بدهید؛ چهار گوشه، راهنمای نصب و گزارش قبل/بعد بگیرید.",12,MUTED);
+    root.addView(installerHint);gap(root,12);
     Button helpButton=button("📖 آموزش استفاده از چهار ابزار",false);
     root.addView(helpButton,new LinearLayout.LayoutParams(-1,px(52)));
     helpButton.setOnClickListener(v->openTutorial(0));
@@ -274,7 +280,7 @@ public class MainActivity extends Activity implements SensorEventListener {
         refreshBeep();
       }).show());
     gap(root,12);root.addView(text("زاویه‌سنج و گونیا: گوشی را با صفحهٔ قائم نگه دارید. در گونیا، ضلع اول را ثبت کنید و برای ضلع دوم، گوشی را در همان صفحه بچرخانید. چرخش روی میز افقی با حسگر گرانش اندازه‌گیری نمی‌شود.",12,MUTED));
-    gap(root,12);root.addView(text("تراز یار • نسخهٔ ۲٫۸ • کالیبراسیون حرفه‌ای، ثبت و گزارش",11,GOLD));
+    gap(root,12);root.addView(text("تراز یار • نسخهٔ ۲٫۹ • نصاب‌یار چهارپایه و گزارش قبل/بعد",11,GOLD));
   }
   void openTutorial(int firstPage){
     if(tutorialOpen)return;
