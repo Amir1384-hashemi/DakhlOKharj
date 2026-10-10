@@ -34,6 +34,11 @@ jobs:
           mkdir -p /tmp/trazyar-help-tests
           javac -encoding UTF-8 -d /tmp/trazyar-help-tests TrazYarInstaller/app/src/main/java/com/trazyar/level/TutorialContent.java TrazYarInstaller/verification/TutorialContentTest.java
           java -cp /tmp/trazyar-help-tests com.trazyar.level.TutorialContentTest
+      - name: Verify two-position calibration math
+        run: |
+          mkdir -p /tmp/trazyar-cal-test
+          javac -encoding UTF-8 -d /tmp/trazyar-cal-test TrazYarInstaller/app/src/main/java/com/trazyar/level/CalibrationMath.java TrazYarInstaller/verification/CalibrationMathTest.java
+          java -cp /tmp/trazyar-cal-test com.trazyar.level.CalibrationMathTest
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
@@ -42,10 +47,10 @@ jobs:
         run: gradle --no-daemon :app:assembleDebug
       - name: Publish downloadable APK on isolated branch
         run: |
-          cp TrazYarInstaller/app/build/outputs/apk/debug/app-debug.apk TrazYar_Samsung_v2_7_DirectHelp.apk
-          test -s TrazYar_Samsung_v2_7_DirectHelp.apk
+          cp TrazYarInstaller/app/build/outputs/apk/debug/app-debug.apk TrazYar_Samsung_v2_8_ProTools.apk
+          test -s TrazYar_Samsung_v2_8_ProTools.apk
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -f TrazYar_Samsung_v2_7_DirectHelp.apk
-          git commit -m "Publish installable TrazYar 2.7 accessible direct protractor and square tutorials APK [skip ci]"
+          git add -f TrazYar_Samsung_v2_8_ProTools.apk
+          git commit -m "Publish installable TrazYar 2.8 pro calibration freeze journal and sharing APK [skip ci]"
           git push origin HEAD:trazyar-direct-install

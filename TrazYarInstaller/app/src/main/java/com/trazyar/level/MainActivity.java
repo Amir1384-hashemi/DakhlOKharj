@@ -13,18 +13,29 @@ import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.content.Intent;
+import android.content.ClipData;
+import android.content.ClipboardManager;
+import android.app.AlertDialog;
+import android.text.InputType;
 import android.graphics.*;
 import android.view.*;
 import android.widget.*;
 import android.graphics.drawable.GradientDrawable;
 import java.util.Locale;
+import java.util.List;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 
 public class MainActivity extends Activity implements SensorEventListener {
   static final int BG=0xff081A13, PANEL=0xff112A20, GREEN=0xffA8ED65, GOLD=0xffE8C87D, TEXT=0xffF1F9E9, MUTED=0xffA7BCAE;
   SensorManager manager; Sensor sensor; Vibrator vibrator;
   final BeepEngine beeper=new BeepEngine();
   boolean measuring=false,resumed=false,observed=false,lowpassInit=false;
-  boolean haptic=true,beepEnabled=true,nearArmed=true,tutorialOpen=false;
+  boolean haptic=true,beepEnabled=true,nearArmed=true,tutorialOpen=false,readingFrozen=false,calibrationComplete=false;
+  int calibrationStage=0;
+  double firstCalX=0,firstCalY=0;
+  long firstCalAt=0;
   float beepVolume=.70f;
   long previewUntil=0;
   double previewError=12;
@@ -37,8 +48,8 @@ public class MainActivity extends Activity implements SensorEventListener {
   int state=-1, candidate=-1;
   long candidateAt=0,lastReading=0,lastSensorUi=0;
   SharedPreferences prefs;
-  TextView status, angles, directions, resultValue, resultDescription, modeHint, sensorStatus, beepStatus;
-  Button start, calibrate, captureReference;
+  TextView status, angles, directions, resultValue, resultDescription, modeHint, sensorStatus, beepStatus, calibrationStatus;
+  Button start, calibrate, captureReference, holdButton, saveButton, historyButton;
   final Button[] toolButtons=new Button[4];
   LevelDrawing drawing; MeasurementGauge meter;
   final Handler handler=new Handler(Looper.getMainLooper());
@@ -50,7 +61,14 @@ public class MainActivity extends Activity implements SensorEventListener {
   @Override public void onCreate(Bundle b) {
     super.onCreate(b); getWindow().setStatusBarColor(BG);getWindow().setNavigationBarColor(BG);
     prefs=getSharedPreferences("trazyar",MODE_PRIVATE);
-    tolerance=prefs.getFloat("tol",.5f);measurementMode=Math.max(0,Math.min(3,prefs.getInt("measurementMode",0)));haptic=prefs.getBoolean("haptic",true);beepEnabled=prefs.getBoolean("beepEnabled",true);beepVolume=prefs.getFloat("beepVolume",.70f);
+    tolerance=prefs.getFloat("tol",.5f);
+    measurementMode=Math.max(0,Math.min(3,prefs.getInt("measurementMode",0)));
+    haptic=prefs.getBoolean("haptic",true);
+    beepEnabled=prefs.getBoolean("beepEnabled",true);
+    beepVolume=prefs.getFloat("beepVolume",.70f);
+    calibrationComplete=prefs.getBoolean("calibrationCompleteV28",false);
+    zeroX=calibrationComplete?prefs.getFloat("calibrationZeroX",0):0;
+    zeroY=calibrationComplete?prefs.getFloat("calibrationZeroY",0):0;
     manager=(SensorManager)getSystemService(Context.SENSOR_SERVICE);
     vibrator=(Vibrator)getSystemService(Context.VIBRATOR_SERVICE);
     if(manager!=null){sensor=manager.getDefaultSensor(Sensor.TYPE_GRAVITY);if(sensor==null)sensor=manager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);}
@@ -140,15 +158,15 @@ public class MainActivity extends Activity implements SensorEventListener {
     start=button("▶ شروع سنجش",true);
     LinearLayout.LayoutParams sparams=new LinearLayout.LayoutParams(0,-1,1);sparams.setMargins(px(3),0,px(3),0);
     row.addView(start,sparams);
-    calibrate=button("⊕ کالیبره",false);calibrate.setEnabled(false);
+    calibrate=button("⊕ کالیبراسیون",false);calibrate.setEnabled(false);calibrate.setTextSize(13);
     LinearLayout.LayoutParams cparams=new LinearLayout.LayoutParams(0,-1,1);cparams.setMargins(px(3),0,px(3),0);
     row.addView(calibrate,cparams);
     start.setOnClickListener(v->{if(measuring)stopMeasure();else startMeasure();});
-    calibrate.setOnClickListener(v->{if(measurementMode==0&&observed){
-      zeroX=rawX;zeroY=rawY;state=-1;candidate=-1;candidateAt=0;
-      updateLevel();
-      Toast.makeText(this,"کالیبره شد",Toast.LENGTH_SHORT).show();
-    }});
+    calibrate.setOnClickListener(v->calibrateStep());
+    gap(panel,7);
+    calibrationStatus=text("",12,GOLD);
+    panel.addView(calibrationStatus);
+    updateCalibrationLabel();
     gap(panel,9);
 
     gap(panel,12);
@@ -166,7 +184,29 @@ public class MainActivity extends Activity implements SensorEventListener {
     });
     angles=text("X:  --.-°       Y:  --.-°",18,TEXT);panel.addView(angles);
     directions=text("گوشی را با صفحهٔ رو به بالا روی سطح بگذارید.",13,MUTED);
-    panel.addView(directions);gap(panel,13);
+    panel.addView(directions);gap(panel,10);
+
+    TextView historyTitle=text("مدیریت اندازه‌گیری‌ها",15,GOLD);
+    historyTitle.setTypeface(null,1);panel.addView(historyTitle);
+    LinearLayout workRow=new LinearLayout(this);
+    workRow.setOrientation(LinearLayout.HORIZONTAL);
+    workRow.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
+    panel.addView(workRow,new LinearLayout.LayoutParams(-1,px(54)));
+    String[] workLabels={"❚❚ قفل عدد","＋ ذخیره نتیجه","▤ دفترچه"};
+    for(int i=0;i<3;i++){
+      Button b=button(workLabels[i],false);
+      b.setTextSize(12);b.setMinWidth(0);b.setPadding(px(1),0,px(1),0);
+      LinearLayout.LayoutParams bp=new LinearLayout.LayoutParams(0,px(50),1);
+      bp.setMargins(px(2),0,px(2),0);workRow.addView(b,bp);
+      if(i==0)holdButton=b;
+      if(i==1)saveButton=b;
+      if(i==2)historyButton=b;
+    }
+    holdButton.setOnClickListener(v->toggleFreeze());
+    saveButton.setOnClickListener(v->saveCurrentMeasurement());
+    historyButton.setOnClickListener(v->showHistory());
+    panel.addView(text("عدد را قفل کنید، با نام پروژه ذخیره کنید و گزارش را به اشتراک بگذارید.",12,MUTED));
+    gap(panel,13);
     updateModeUI();
 
     gap(root,16);
@@ -219,8 +259,22 @@ public class MainActivity extends Activity implements SensorEventListener {
       public void onProgressChanged(SeekBar bar,int n,boolean fromUser){tolerance=.2+n*.1;sens.setText(String.format(Locale.US,"حساسیت: ±%.1f°",tolerance));prefs.edit().putFloat("tol",(float)tolerance).apply();candidate=-1;candidateAt=0;}
       public void onStartTrackingTouch(SeekBar bar){} public void onStopTrackingTouch(SeekBar bar){}
     });
+    gap(settings,10);
+    Button resetCal=button("↺ پاک کردن کالیبراسیون ذخیره‌شده",false);
+    resetCal.setTextSize(13);settings.addView(resetCal);
+    resetCal.setOnClickListener(v->new AlertDialog.Builder(this)
+      .setTitle("بازنشانی کالیبراسیون")
+      .setMessage("مقادیر تصحیح دو محوره پاک شوند؟ اندازه‌گیری‌های دفترچه حذف نمی‌شوند.")
+      .setNegativeButton("انصراف",null)
+      .setPositiveButton("بازنشانی",(d,which)->{
+        calibrationStage=0;calibrationComplete=false;zeroX=0;zeroY=0;
+        prefs.edit().remove("calibrationZeroX").remove("calibrationZeroY").putBoolean("calibrationCompleteV28",false).apply();
+        updateCalibrationLabel();
+        if(measurementMode==0&&observed)updateLevel();
+        refreshBeep();
+      }).show());
     gap(root,12);root.addView(text("زاویه‌سنج و گونیا: گوشی را با صفحهٔ قائم نگه دارید. در گونیا، ضلع اول را ثبت کنید و برای ضلع دوم، گوشی را در همان صفحه بچرخانید. چرخش روی میز افقی با حسگر گرانش اندازه‌گیری نمی‌شود.",12,MUTED));
-    gap(root,12);root.addView(text("تراز یار • نسخهٔ ۲٫۷ • آموزش واضح گونیا و زاویه‌سنج",11,GOLD));
+    gap(root,12);root.addView(text("تراز یار • نسخهٔ ۲٫۸ • کالیبراسیون حرفه‌ای، ثبت و گزارش",11,GOLD));
   }
   void openTutorial(int firstPage){
     if(tutorialOpen)return;
@@ -238,16 +292,196 @@ public class MainActivity extends Activity implements SensorEventListener {
       }
     );
   }
+  void updateCalibrationLabel(){
+    if(calibrationStatus==null)return;
+    if(calibrationStage==1){
+      calibrationStatus.setText("مرحله ۲ از ۲: گوشی را روی همان سطح، ۱۸۰° در جهت صفحه بچرخانید؛ دوباره «کالیبراسیون» را بزنید.");
+      if(calibrate!=null)calibrate.setText("ثبت وضعیت دوم");
+    }else{
+      calibrationStatus.setText(calibrationComplete?
+        "✓ تصحیح دوحالته ذخیره شده و پس از بستن برنامه نیز حفظ می‌شود":
+        "کالیبراسیون دوحالته: روی یک سطح تقریباً افقی، دو جهت مخالف گوشی را ثبت کنید.");
+      if(calibrate!=null)calibrate.setText("⊕ کالیبراسیون");
+    }
+  }
+  void calibrateStep(){
+    if(measurementMode!=0||!measuring||!observed||readingFrozen)return;
+    // The two observations must be taken with the DISPLAY FACING UP, in opposite
+    // compass orientations. Gravity alone cannot verify a yaw rotation.
+    if(Math.max(Math.abs(rawX),Math.abs(rawY))>12){
+      Toast.makeText(this,"برای کالیبراسیون، گوشی را روی سطح تقریباً افقی قرار دهید.",Toast.LENGTH_LONG).show();
+      return;
+    }
+    if(calibrationStage==0){
+      firstCalX=rawX;firstCalY=rawY;
+      firstCalAt=SystemClock.elapsedRealtime();calibrationStage=1;updateCalibrationLabel();
+      new AlertDialog.Builder(this)
+        .setTitle("مرحله اول ثبت شد")
+        .setMessage("گوشی را بدون پشت‌ورو کردن، روی همان سطح به اندازهٔ ۱۸۰ درجه بچرخانید تا بالای گوشی جای پایین آن قرار بگیرد. سپس «ثبت وضعیت دوم» را لمس کنید. برنامه چرخش واقعی را با شتاب‌سنج به‌تنهایی تشخیص نمی‌دهد.")
+        .setPositiveButton("متوجه شدم",null).show();
+      return;
+    }
+    if(SystemClock.elapsedRealtime()-firstCalAt<1200){
+      Toast.makeText(this,"پس از چرخش ۱۸۰ درجه و ثابت شدن گوشی، وضعیت دوم را ثبت کنید.",Toast.LENGTH_LONG).show();
+      return;
+    }
+    double newX=CalibrationMath.zeroBias(firstCalX,rawX);
+    double newY=CalibrationMath.zeroBias(firstCalY,rawY);
+    if(!Double.isFinite(newX)||!Double.isFinite(newY)){
+      calibrationStage=0;updateCalibrationLabel();return;
+    }
+    zeroX=newX;zeroY=newY;calibrationComplete=true;calibrationStage=0;
+    prefs.edit()
+      .putFloat("calibrationZeroX",(float)zeroX)
+      .putFloat("calibrationZeroY",(float)zeroY)
+      .putBoolean("calibrationCompleteV28",true).apply();
+    state=-1;candidate=-1;candidateAt=0;
+    updateCalibrationLabel();
+    updateLevel();refreshBeep();
+    new AlertDialog.Builder(this)
+      .setTitle("کالیبراسیون ذخیره شد")
+      .setMessage("تصحیح هر دو محور ثبت شد و در اجرای بعدی هم باقی می‌ماند. برای اطمینان از دقت، روی یک سطح مرجع واقعی امتحان کنید.")
+      .setPositiveButton("تأیید",null).show();
+  }
+  void toggleFreeze(){
+    if(!measuring||!observed){
+      Toast.makeText(this,"ابتدا سنجش را شروع کنید و منتظر دادهٔ حسگر بمانید.",Toast.LENGTH_SHORT).show();return;
+    }
+    readingFrozen=!readingFrozen;
+    if(holdButton!=null)holdButton.setText(readingFrozen?"▶ ادامهٔ زنده":"❚❚ قفل عدد");
+    if(readingFrozen){
+      // Freeze must silence even a previously continuous lock tone.
+      beeper.update(false,20,tolerance,false,beepVolume);
+      status.setText("❚❚ اندازه‌گیری قفل شد");
+      status.setTextColor(GOLD);
+    }else{
+      lowpassInit=false;lastReading=SystemClock.elapsedRealtime();
+      status.setText("● سنجش زنده فعال شد");
+    }
+    if(calibrate!=null)calibrate.setEnabled(measurementMode==0&&measuring&&observed&&!readingFrozen);
+    refreshBeep();
+  }
+  String[] currentReading(){
+    String tool="",value="",extra="";
+    switch(measurementMode){
+      case 0:
+        tool="تراز حبابی";
+        value=String.format(Locale.US,"X=%+.2f° | Y=%+.2f°",x,y);
+        extra= (Math.max(Math.abs(x),Math.abs(y))<=tolerance?"در محدودهٔ تراز":"خارج از محدودهٔ تراز")
+          +" | تلرانس "+String.format(Locale.US,"±%.1f°",tolerance)
+          +" | "+(calibrationComplete?"کالیبراسیون ذخیره‌شده":"کالیبراسیون ثبت نشده");
+        break;
+      case 1:
+        tool="شیب‌سنج";
+        value=String.format(Locale.US,"%.2f°",tiltDegrees);
+        extra=Double.isInfinite(slopePercent)?"درصد شیب: نزدیک عمودی":
+          String.format(Locale.US,"درصد شیب: %.2f%%",slopePercent);
+        break;
+      case 2:
+        if(!edgeAngleValid)return null;
+        tool="زاویه‌سنج";value=String.format(Locale.US,"%.2f°",edgeAngle);
+        extra="لبهٔ بلند گوشی نسبت به افق در صفحهٔ عمودی";
+        break;
+      case 3:
+        if(!edgeAngleValid||Double.isNaN(referenceAngle))return null;
+        tool="گونیا";value=String.format(Locale.US,"%.2f°",squareAngle);
+        extra=String.format(Locale.US,"اختلاف با زاویهٔ قائمه: %.2f°",Math.abs(90-squareAngle));
+        break;
+      default:return null;
+    }
+    return new String[]{tool,value,extra};
+  }
+  void saveCurrentMeasurement(){
+    if(!measuring||!observed){
+      Toast.makeText(this,"برای ذخیره، ابتدا سنجش را فعال کنید.",Toast.LENGTH_SHORT).show();return;
+    }
+    String[] reading=currentReading();
+    if(reading==null){
+      Toast.makeText(this,"برای این ابزار ابتدا گوشی را درست قرار دهید و در گونیا ضلع مرجع را ثبت کنید.",Toast.LENGTH_LONG).show();
+      return;
+    }
+    final android.widget.EditText note=new android.widget.EditText(this);
+    note.setSingleLine(true);note.setTextSize(16);
+    note.setHint("مثلاً: نصب کابینت آشپزخانه");
+    note.setText(prefs.getString("lastProjectName",""));
+    LinearLayout wrapper=new LinearLayout(this);wrapper.setPadding(px(18),0,px(18),0);
+    wrapper.addView(note,new LinearLayout.LayoutParams(-1,-2));
+    new AlertDialog.Builder(this)
+      .setTitle("ذخیرهٔ اندازه‌گیری")
+      .setMessage(reading[0]+" — "+reading[1]+"\n"+reading[2]+"\nنام پروژه/یادداشت (اختیاری):")
+      .setView(wrapper)
+      .setNegativeButton("انصراف",null)
+      .setPositiveButton("ذخیره",(d,which)->{
+        String name=note.getText().toString().trim();
+        if(name.length()>75)name=name.substring(0,75);
+        prefs.edit().putString("lastProjectName",name).apply();
+        MeasurementLog.save(this,name,reading[0],reading[1],reading[2]);
+        Toast.makeText(this,"نتیجه در دفترچه ذخیره شد",Toast.LENGTH_SHORT).show();
+      }).show();
+  }
+  void showHistory(){
+    final java.util.List<MeasurementLog.Entry> items=MeasurementLog.list(this);
+    if(items.isEmpty()){
+      new AlertDialog.Builder(this)
+        .setTitle("دفترچه اندازه‌گیری‌ها")
+        .setMessage("هنوز نتیجه‌ای ذخیره نکرده‌اید. ابتدا عدد را در یکی از ابزارها ثبت کنید.")
+        .setPositiveButton("متوجه شدم",null).show();
+      return;
+    }
+    String[] names=new String[items.size()];
+    for(int i=0;i<items.size();i++){
+      MeasurementLog.Entry e=items.get(i);
+      names[i]=(i+1)+". "+e.tool+"  "+e.value+"\n"+e.name+"  •  "+MeasurementLog.dateText(e.time);
+    }
+    new AlertDialog.Builder(this)
+      .setTitle("دفترچه اندازه‌گیری‌ها ("+items.size()+")")
+      .setItems(names,(d,which)->showRecord(items.get(which)))
+      .setPositiveButton("اشتراک کل گزارش",(d,which)->shareText(MeasurementLog.exportText(items)))
+      .setNeutralButton("پاک‌کردن همه",(d,which)->{
+        new AlertDialog.Builder(this)
+          .setTitle("حذف دفترچه")
+          .setMessage("تمام اندازه‌گیری‌های ذخیره‌شده پاک شوند؟")
+          .setNegativeButton("انصراف",null)
+          .setPositiveButton("حذف دائمی",(ignore,which2)->{
+            MeasurementLog.clear(this);
+            Toast.makeText(this,"دفترچه پاک شد",Toast.LENGTH_SHORT).show();
+          }).show();
+      })
+      .setNegativeButton("بستن",null).show();
+  }
+  void showRecord(MeasurementLog.Entry entry){
+    new AlertDialog.Builder(this)
+      .setTitle(entry.tool+" — "+entry.value)
+      .setMessage(MeasurementLog.text(entry))
+      .setPositiveButton("اشتراک‌گذاری",(d,w)->shareText(MeasurementLog.text(entry)))
+      .setNeutralButton("کپی",(d,w)->{
+        ClipboardManager clipboard=(ClipboardManager)getSystemService(Context.CLIPBOARD_SERVICE);
+        if(clipboard!=null)clipboard.setPrimaryClip(ClipData.newPlainText("اندازه‌گیری تراز یار",MeasurementLog.text(entry)));
+        Toast.makeText(this,"نتیجه کپی شد",Toast.LENGTH_SHORT).show();
+      })
+      .setNegativeButton("بستن",null).show();
+  }
+  void shareText(String report){
+    Intent i=new Intent(Intent.ACTION_SEND);
+    i.setType("text/plain");i.putExtra(Intent.EXTRA_TEXT,report);
+    try{startActivity(Intent.createChooser(i,"ارسال گزارش تراز یار"));}
+    catch(Exception ex){Toast.makeText(this,"برنامه‌ای برای اشتراک‌گذاری یافت نشد",Toast.LENGTH_SHORT).show();}
+  }
+
   void startMeasure() {
     if(sensor==null)return;
-    measuring=true;observed=false;lowpassInit=false;zeroX=0;zeroY=0;state=-1;candidate=-1;candidateAt=0;referenceAngle=Double.NaN;nearArmed=true;
+    measuring=true;observed=false;lowpassInit=false;readingFrozen=false;calibrationStage=0;state=-1;candidate=-1;candidateAt=0;referenceAngle=Double.NaN;nearArmed=true;
+    if(holdButton!=null)holdButton.setText("❚❚ قفل عدد");
+    updateCalibrationLabel();
     status.setText("در حال خواندن حسگر...");start.setText("■ توقف سنجش");calibrate.setEnabled(false);
     getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
     if(resumed)manager.registerListener(this,sensor,SensorManager.SENSOR_DELAY_UI);
     refreshMeasureUI();refreshBeep();
   }
   void stopMeasure() {
-    measuring=false;observed=false;state=-1;candidate=-1;
+    measuring=false;observed=false;readingFrozen=false;calibrationStage=0;state=-1;candidate=-1;
+    if(holdButton!=null)holdButton.setText("❚❚ قفل عدد");
+    updateCalibrationLabel();
     if(manager!=null)manager.unregisterListener(this);
     getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
     start.setText("▶ شروع سنجش");calibrate.setEnabled(false);status.setText("سنجش متوقف شد");angles.setText("X: --.-°       Y: --.-°");drawing.setTilt(0,0,false);resultValue.setText("—");refreshBeep();refreshMeasureUI();
@@ -284,6 +518,10 @@ public class MainActivity extends Activity implements SensorEventListener {
       state=-1;candidate=-1;candidateAt=0;
       // A reference from another visit is invalid; each square session captures its own.
       if(mode==3)referenceAngle=Double.NaN;
+      readingFrozen=false;
+      if(holdButton!=null)holdButton.setText("❚❚ قفل عدد");
+      calibrationStage=0;
+      updateCalibrationLabel();
     }
     if(sensor!=null&&!measuring)startMeasure();
     updateModeUI();refreshBeep();
@@ -310,7 +548,8 @@ public class MainActivity extends Activity implements SensorEventListener {
     resultValue.setVisibility(bubble?View.GONE:View.VISIBLE);
     resultDescription.setVisibility(bubble?View.GONE:View.VISIBLE);
     captureReference.setVisibility(measurementMode==3?View.VISIBLE:View.GONE);
-    if(calibrate!=null)calibrate.setEnabled(measuring&&observed&&bubble);
+    if(calibrate!=null)calibrate.setEnabled(measuring&&observed&&bubble&&!readingFrozen);
+    if(calibrationStatus!=null)calibrationStatus.setVisibility(bubble?View.VISIBLE:View.GONE);
     if(meter!=null){meter.setMode(measurementMode);meter.setReading(0,0,false);}
     if(!bubble) {
       angles.setVisibility(View.GONE);
@@ -415,7 +654,7 @@ public class MainActivity extends Activity implements SensorEventListener {
     drawing.setTilt(x,y,leveled);
   }
   @Override public void onSensorChanged(SensorEvent e){
-    if(!measuring || e.sensor!=sensor)return;
+    if(!measuring || e.sensor!=sensor || readingFrozen)return;
     for(int i=0;i<3;i++){if(!lowpassInit)gv[i]=e.values[i];else gv[i]=.84f*gv[i]+.16f*e.values[i];}
     lowpassInit=true;
     double gz=Math.max(.0001,Math.abs(gv[2]));
@@ -450,7 +689,7 @@ public class MainActivity extends Activity implements SensorEventListener {
     handler.postDelayed(()->refreshBeep(),2050);
   }
   void refreshBeep(){
-    if(tutorialOpen){
+    if(tutorialOpen || readingFrozen){
       beeper.update(false,20,tolerance,false,beepVolume);
       return;
     }
