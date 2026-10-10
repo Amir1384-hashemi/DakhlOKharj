@@ -123,6 +123,20 @@ def back(delay=0.8):
     adb("shell","input","keyevent","KEYCODE_BACK")
     time.sleep(delay)
 
+def screenshot(label):
+    """PNG screenshot from actual Android emulator UI; never a synthetic mockup."""
+    from pathlib import Path
+    folder=Path("TrazYarInstaller/store_assets/screenshots")
+    folder.mkdir(parents=True,exist_ok=True)
+    filename=folder/(label+".png")
+    result=subprocess.run(["adb","exec-out","screencap","-p"],capture_output=True,timeout=40)
+    if result.returncode or not result.stdout.startswith(b"\x89PNG"):
+        raise AssertionError("Android screenshot failed: "+label+" "+result.stderr.decode(errors="replace")[-350:])
+    filename.write_bytes(result.stdout)
+    if filename.stat().st_size<10000:
+        raise AssertionError("Android screenshot unusually small: "+label)
+    print("SCREENSHOT:",label,filename.stat().st_size,flush=True)
+
 def main():
     if not os.path.isfile(APK):
         raise RuntimeError("APK missing: "+APK)
@@ -140,6 +154,7 @@ def main():
     time.sleep(6.5)
     verify("مرکز آموزش", "first-run introduction and training center")
     verify("معرفی تراز یار","offline app introduction")
+    screenshot("01_guide_intro")
     tap("فهرست ۱۲ موضوع")
     verify("آموزش گونیا","all 12 topics list visible")
     back()
@@ -160,6 +175,7 @@ def main():
     verify("از نوع کارتان شروع کنید","home project based help")
     tap("از نوع کارتان شروع کنید")
     verify("راهنمای انجام کار","project-based learning screen")
+    screenshot("02_project_coach")
     for phrase in ["ماشین لباس‌شویی","کابینت یا میز","قفسه و شلف",
                    "در یا ستون","زاویهٔ ۹۰","رمپ یا مسیر آب"]:
         tap(phrase,0.55)
@@ -171,6 +187,7 @@ def main():
     verify("مرحله 1 از","previous project step")
     tap("ورود مستقیم به نصاب‌یار",0.9)
     verify("نصاب‌یار حرفه‌ای","installer assistant opens")
+    screenshot("03_installer_setup")
     verify_scrolling("ثبت وضعیت قبل","installer before measurement action")
     tap_scrolling("آزمون: نمونه سنسور قبل")
     tap_scrolling("ثبت وضعیت قبل",1.3)
@@ -226,6 +243,17 @@ def main():
     adb("shell","pm","clear",PKG)
     adb("shell","am","start","-W","-n",PKG+"/.MainActivity",timeout=35)
     time.sleep(4)
+    # Capture unmodified, sensor-on running UI for genuine store listings.
+    screenshot("04_help_sensors_enabled")
+    back()
+    time.sleep(1)
+    screenshot("05_main_home")
+    for mode,name in [(0,"bubble"),(1,"inclinometer"),(2,"protractor"),(3,"square")]:
+        adb("shell","am","start","-n",PKG+"/.MainActivity","--ei","guide_tool",str(mode))
+        time.sleep(.9)
+        adb("shell","input","swipe","500","1600","500","650","370")
+        time.sleep(.6)
+        screenshot("0"+str(mode+6)+"_"+name)
     live_pid=adb("shell","pidof",PKG,check=False)
     if not live_pid.strip():
         raise AssertionError("normal live-sensor launch terminated")
