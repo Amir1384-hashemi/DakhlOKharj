@@ -60,6 +60,21 @@ jobs:
       - name: Build Android APK
         working-directory: TrazYarInstaller
         run: gradle --no-daemon :app:assembleDebug
+      - name: Enable Android emulator hardware acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Android emulator UI smoke tests (all tools and walkthroughs)
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 30
+          target: google_apis
+          arch: x86_64
+          profile: pixel_5
+          disable-animations: true
+          emulator-boot-timeout: 600
+          script: python3 TrazYarInstaller/verification/emulator_smoke.py
       - name: Publish downloadable APK on isolated branch
         run: |
           cp TrazYarInstaller/app/build/outputs/apk/debug/app-debug.apk TrazYar_Samsung_v3_1_ProjectCoach.apk
