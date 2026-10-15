@@ -1,0 +1,114 @@
+name: QanunBan Public APK Release
+on:
+  push:
+    branches:
+      - qanunban-public-release
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout isolated public branch
+        uses: actions/checkout@v4
+      - name: Install Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install stable Flutter SDK
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Generate Android scaffold and apply QanunBan branding
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cd qanunban/mobile
+          cp lib/main.dart /tmp/qanunban-main.dart
+          cp lib/official_feed.dart /tmp/qanunban-feed.dart
+          cp pubspec.yaml /tmp/qanunban-pubspec.yaml
+          flutter create --platforms=android --org com.qanunban --project-name qanunban .
+          cp /tmp/qanunban-main.dart lib/main.dart
+          cp /tmp/qanunban-feed.dart lib/official_feed.dart
+          cp /tmp/qanunban-pubspec.yaml pubspec.yaml
+          rm -f test/widget_test.dart
+          base64 -d assets/icon.png.b64 > assets/icon.png
+          python3 -m pip install --quiet Pillow
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+          from PIL import Image
+          root = Path('.')
+          a = root/'android/app/src/main/AndroidManifest.xml'
+          t = a.read_text()
+          if 'android.permission.INTERNET' not in t:
+              t=t.replace('<application','<uses-permission android:name="android.permission.INTERNET"/>\n    <application',1)
+          t = re.sub(r'android:label="[^"]+"','android:label="قانون‌بان"',t)
+          a.write_text(t)
+          k = root/'android/app/build.gradle.kts'
+          g = root/'android/app/build.gradle'
+          if k.exists():
+              t=k.read_text()
+              t=t.replace('minSdk = flutter.minSdkVersion','minSdk = 24')
+              k.write_text(t)
+          elif g.exists():
+              t=g.read_text()
+              t=t.replace('minSdkVersion flutter.minSdkVersion','minSdkVersion 24')
+              g.write_text(t)
+          icon=Image.open(root/'assets/icon.png').convert('RGBA')
+          for density,size in [('mdpi',48),('hdpi',72),('xhdpi',96),('xxhdpi',144),('xxxhdpi',192)]:
+              p=root/'android/app/src/main/res'/('mipmap-'+density)
+              p.mkdir(exist_ok=True,parents=True)
+              icon.resize((size,size),Image.Resampling.LANCZOS).save(p/'ic_launcher.png')
+          print("Branded icon and Android 7+ settings configured")
+          PY
+      - name: Flutter dependency resolution and tests
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cd qanunban/mobile
+          flutter pub get
+          flutter analyze --no-fatal-infos
+          flutter test
+      - name: Build genuine signed Android APKs
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cd qanunban/mobile
+          flutter build apk --release
+          flutter build apk --release --split-per-abi
+          mkdir -p ../../release
+          cp build/app/outputs/flutter-apk/app-release.apk ../../release/QanunBan-Universal.apk
+          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk ../../release/QanunBan-ARM64.apk
+          for f in ../../release/*.apk; do
+            test "$(stat -c%s "$f")" -gt 3000000
+            unzip -t "$f" > /dev/null
+            unzip -Z1 "$f" | grep -q 'AndroidManifest.xml'
+            unzip -Z1 "$f" | grep -q 'classes.dex'
+            unzip -Z1 "$f" | grep -q 'libflutter.so'
+            bt=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)
+            "$bt/apksigner" verify "$f"
+            "$bt/aapt" dump badging "$f" | head -n 5
+          done
+          cd ../../release
+          sha256sum *.apk > SHA256SUMS.txt
+      - name: Publish APK files in public GitHub prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euxo pipefail
+          gh release create "qanunban-public-beta-v1.0.0" \
+            release/QanunBan-Universal.apk \
+            release/QanunBan-ARM64.apk \
+            release/SHA256SUMS.txt \
+            --title "قانون‌بان | Android beta v1.0.0" \
+            --notes "Flutter-built and Android-signed APK. Includes official dotic.ir public feed. No background push or legal AI in this beta. Minimum Android 7." \
+            --prerelease \
+            --target "$GITHUB_SHA"
+          gh release view "qanunban-public-beta-v1.0.0" --json url,assets \
+            --jq '{url:.url,download_links:[.assets[].url]}'
