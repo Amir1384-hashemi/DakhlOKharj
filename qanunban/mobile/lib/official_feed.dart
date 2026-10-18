@@ -172,7 +172,7 @@ List<OfficialNews> parseSyndicationFeed(String body, {Uri? baseUri}) {
     if (uri == null) continue;
     final id = _documentId(uri) ?? uri.path;
     if (!ids.add(id)) continue;
-    final dateElement = entry.querySelector('pubDate, published, updated, dc\\:date');
+    final dateElement = entry.querySelector('pubDate, published, updated');
     final summary = _clean(entry.querySelector('description, summary, content')?.text ?? '');
     found.add(OfficialNews(
       id: id,
