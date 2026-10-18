@@ -71,6 +71,7 @@ class _NewsHomeState extends State<NewsHome> with WidgetsBindingObserver {
 
   QanunBanStore? _store;
   List<OfficialNews> _documents = [];
+  Set<String> _latestIds = {};
   Set<String> _knownIds = {};
   Set<String> _freshIds = {};
   Set<String> _savedIds = {};
@@ -99,6 +100,8 @@ class _NewsHomeState extends State<NewsHome> with WidgetsBindingObserver {
       final local = await QanunBanStore.open();
       _store = local;
       _documents = local.cachedDocuments;
+      _latestIds = local.latestFeedIds;
+      if (_latestIds.isEmpty) _latestIds = _documents.map((d) => d.id).toSet();
       _knownIds = local.knownIds;
       _baselineInitialized = local.hasBaseline;
       _savedIds = local.savedIds;
@@ -182,9 +185,24 @@ class _NewsHomeState extends State<NewsHome> with WidgetsBindingObserver {
         createdAt: now,
       )).toList();
 
+      final mergedById = <String, OfficialNews>{};
+      for (final item in fetched) {
+        mergedById[item.id] = item;
+      }
+      // Keep saved records available even after they disappear from the latest page.
+      for (final item in _documents.where((d) => _savedIds.contains(d.id))) {
+        mergedById.putIfAbsent(item.id, () => item);
+      }
+      for (final item in _documents) {
+        if (mergedById.length >= 500) break;
+        mergedById.putIfAbsent(item.id, () => item);
+      }
+      final mergedDocuments = mergedById.values.toList();
+      final latestIds = fetched.map((d) => d.id).toSet();
+
       final local = _store;
       if (local != null) {
-        await local.cacheDocuments(fetched);
+        await local.cacheDocuments(mergedDocuments, latestIds: latestIds);
         await local.setKnownIds(_knownIds);
         await local.setLastChecked(now);
         if (records.isNotEmpty) await local.addAlerts(records);
@@ -192,7 +210,8 @@ class _NewsHomeState extends State<NewsHome> with WidgetsBindingObserver {
 
       if (!mounted) return;
       setState(() {
-        _documents = fetched;
+        _documents = mergedDocuments;
+        _latestIds = latestIds;
         _freshIds = records.map((a) => a.id).toSet();
         _lastChecked = now;
         if (local != null) _alerts = local.alerts;
@@ -381,6 +400,7 @@ class _NewsHomeState extends State<NewsHome> with WidgetsBindingObserver {
   Widget _feedPage() {
     final query = _search.text.trim();
     final matches = _documents.where((d) =>
+      _latestIds.contains(d.id) &&
       (_categoryFilter == 'همه' || d.category == _categoryFilter) &&
       (query.isEmpty || d.title.contains(query) ||
           d.category.contains(query) || d.summary.contains(query))
@@ -704,7 +724,7 @@ class _NewsHomeState extends State<NewsHome> with WidgetsBindingObserver {
         Card(child: ListTile(
           leading: const Icon(Icons.article_outlined),
           title: const Text('اسناد فعلی'),
-          trailing: Text(_documents.length.toString()),
+          trailing: Text(_latestIds.length.toString()),
         )),
         Card(child: ListTile(
           leading: const Icon(Icons.bookmark_outline),
