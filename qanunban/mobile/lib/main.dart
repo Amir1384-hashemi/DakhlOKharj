@@ -198,7 +198,7 @@ class _NewsHomeState extends State<NewsHome> with WidgetsBindingObserver {
         if (local != null) _alerts = local.alerts;
       });
 
-      if (records.isNotEmpty) {
+      if (records.isNotEmpty && mounted) {
         if (_notificationsEnabled && _notificationsReady) {
           for (var i = 0; i < records.length; i++) {
             final alert = records[i];
@@ -556,6 +556,7 @@ class _NewsHomeState extends State<NewsHome> with WidgetsBindingObserver {
           minLines: 7,
           maxLines: 14,
           maxLength: 12000,
+          onChanged: (_) => setState(() {}),
           decoration: const InputDecoration(
             alignLabelWithHint: true,
             labelText: 'متن ماده، تبصره یا بند',
