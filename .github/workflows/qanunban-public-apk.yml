@@ -4,6 +4,9 @@ on:
     branches:
       - qanunban-public-release
   workflow_dispatch:
+concurrency:
+  group: qanunban-operational-build
+  cancel-in-progress: true
 permissions:
   contents: write
 jobs:
