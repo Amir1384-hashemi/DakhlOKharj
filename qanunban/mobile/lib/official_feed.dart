@@ -221,6 +221,50 @@ Future<String> _download(http.Client client, Uri uri) async {
   return utf8.decode(bytes, allowMalformed: true);
 }
 
+
+String extractOfficialDocumentText(String htmlBody) {
+  final doc = parser.parse(htmlBody);
+  for (final element in doc.querySelectorAll(
+    'script, style, nav, header, footer, aside, form, button, .sidebar, .menu, .breadcrumb',
+  )) {
+    element.remove();
+  }
+
+  final selectors = <String>[
+    'article',
+    '.document-content',
+    '.news-content',
+    '.entry-content',
+    '.content',
+    '#content',
+    'main',
+    'body',
+  ];
+  String best = '';
+  for (final selector in selectors) {
+    final element = doc.querySelector(selector);
+    if (element == null) continue;
+    final text = element.text.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (text.length > best.length) best = text;
+  }
+  if (best.length < 40) {
+    throw StateError('متن قابل تحلیل در صفحه رسمی پیدا نشد.');
+  }
+  return best.length > 12000 ? best.substring(0, 12000) : best;
+}
+
+Future<String> fetchOfficialDocumentText(String rawUrl) async {
+  final uri = _officialUri(rawUrl);
+  if (uri == null) throw ArgumentError('پیوند باید از دامنه رسمی dotic.ir باشد.');
+  final client = http.Client();
+  try {
+    final html = await _download(client, uri);
+    return extractOfficialDocumentText(html);
+  } finally {
+    client.close();
+  }
+}
+
 Future<List<OfficialNews>> fetchOfficialNews() async {
   final client = http.Client();
   final failures = <String>[];
