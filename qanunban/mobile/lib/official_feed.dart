@@ -112,10 +112,25 @@ DateTime? _dateFrom(dom.Element? element) {
   return DateTime.tryParse(value);
 }
 
+dom.Element? _containerFor(dom.Element element) {
+  dom.Element? current = element.parent;
+  while (current != null) {
+    if (current.localName == 'article' ||
+        current.localName == 'li' ||
+        current.classes.any((name) => const {
+          'card', 'news-item', 'document-item', 'item',
+        }.contains(name))) {
+      return current;
+    }
+    current = current.parent;
+  }
+  return element.parent;
+}
+
 String _titleFor(dom.Element anchor) {
   final direct = _clean(anchor.text);
   if (direct.length >= 6 && direct.length <= 650) return direct;
-  final container = anchor.closest('article, li, .card, .news-item, .document-item, .item');
+  final container = _containerFor(anchor);
   final heading = container?.querySelector('h1, h2, h3, h4, .title, .news-title');
   return _clean(heading?.text ?? direct);
 }
