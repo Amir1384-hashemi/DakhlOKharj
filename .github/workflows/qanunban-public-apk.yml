@@ -47,6 +47,8 @@ jobs:
           t = a.read_text()
           if 'android.permission.INTERNET' not in t:
               t=t.replace('<application','<uses-permission android:name="android.permission.INTERNET"/>\n    <application',1)
+          if 'android.permission.POST_NOTIFICATIONS' not in t:
+              t=t.replace('<application','<uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>\n    <application',1)
           t = re.sub(r'android:label="[^"]+"','android:label="قانون‌بان"',t)
           a.write_text(t)
           k = root/'android/app/build.gradle.kts'
@@ -54,10 +56,18 @@ jobs:
           if k.exists():
               t=k.read_text()
               t=t.replace('minSdk = flutter.minSdkVersion','minSdk = 24')
+              if 'isCoreLibraryDesugaringEnabled = true' not in t:
+                  t=re.sub(r'(compileOptions\s*\{)',r'\1\n        isCoreLibraryDesugaringEnabled = true',t,count=1)
+              if 'coreLibraryDesugaring(' not in t:
+                  t=t.replace('dependencies {','dependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")',1)
               k.write_text(t)
           elif g.exists():
               t=g.read_text()
               t=t.replace('minSdkVersion flutter.minSdkVersion','minSdkVersion 24')
+              if 'coreLibraryDesugaringEnabled true' not in t:
+                  t=re.sub(r'(compileOptions\s*\{)',r'\1\n        coreLibraryDesugaringEnabled true',t,count=1)
+              if 'coreLibraryDesugaring ' not in t:
+                  t=t.replace('dependencies {',"dependencies {\n    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4'",1)
               g.write_text(t)
           icon=Image.open(root/'assets/icon.png').convert('RGBA')
           for density,size in [('mdpi',48),('hdpi',72),('xhdpi',96),('xxhdpi',144),('xxxhdpi',192)]:
@@ -102,12 +112,12 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
-          gh release create "qanunban-public-beta-v1.0.0" \
+          gh release create "qanunban-operational-beta-v1.1.0" \
             release/QanunBan-Universal.apk \
             release/QanunBan-ARM64.apk \
             release/SHA256SUMS.txt \
-            --title "قانون‌بان | Android beta v1.0.0" \
-            --notes "Flutter-built and Android-signed APK. Includes official dotic.ir public feed. No background push or legal AI in this beta. Minimum Android 7." \
+            --title "قانون‌بان | Operational Android beta v1.1.0" \
+            --notes "Operational beta: official-feed reader, persisted bookmarks and alert history, Android local notifications during successful refresh, configurable watched categories, and deterministic Persian legal-text extraction. Background monitoring when app is closed and cloud AI analysis are not included. Minimum Android 7." \
             --prerelease \
             --target "$GITHUB_SHA"
           gh release view "qanunban-public-beta-v1.0.0" --json url,assets \
