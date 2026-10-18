@@ -62,15 +62,21 @@ jobs:
               if 'isCoreLibraryDesugaringEnabled = true' not in t:
                   t=re.sub(r'(compileOptions\s*\{)',r'\1\n        isCoreLibraryDesugaringEnabled = true',t,count=1)
               if 'coreLibraryDesugaring(' not in t:
-                  t=t.replace('dependencies {','dependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")',1)
+                  if 'dependencies {' in t:
+                      t=t.replace('dependencies {','dependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")',1)
+                  else:
+                      t += '\n\ndependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")\n}\n'
               k.write_text(t)
           elif g.exists():
               t=g.read_text()
               t=t.replace('minSdkVersion flutter.minSdkVersion','minSdkVersion 24')
               if 'coreLibraryDesugaringEnabled true' not in t:
                   t=re.sub(r'(compileOptions\s*\{)',r'\1\n        coreLibraryDesugaringEnabled true',t,count=1)
-              if 'coreLibraryDesugaring ' not in t:
-                  t=t.replace('dependencies {',"dependencies {\n    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4'",1)
+              if "coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4'" not in t:
+                  if 'dependencies {' in t:
+                      t=t.replace('dependencies {',"dependencies {\n    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4'",1)
+                  else:
+                      t += "\n\ndependencies {\n    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4'\n}\n"
               g.write_text(t)
           icon=Image.open(root/'assets/icon.png').convert('RGBA')
           for density,size in [('mdpi',48),('hdpi',72),('xhdpi',96),('xxhdpi',144),('xxxhdpi',192)]:
