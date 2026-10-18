@@ -289,6 +289,26 @@ class _NewsHomeState extends State<NewsHome> with WidgetsBindingObserver {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
+  Future<void> _extractForAnalysis(
+    OfficialNews item,
+    BuildContext sheetContext,
+  ) async {
+    Navigator.of(sheetContext).pop();
+    _showMessage('در حال دریافت متن سند از منبع رسمی…');
+    try {
+      final text = await fetchOfficialDocumentText(item.url);
+      if (!mounted) return;
+      setState(() {
+        _articleInput.text = text;
+        _analysis = null;
+        _tab = 3;
+      });
+      _showMessage('متن سند دریافت شد؛ اکنون تحلیل اولیه را اجرا کنید.');
+    } catch (e) {
+      _showMessage('استخراج متن ناموفق بود. ممکن است صفحه محدودیت دسترسی داشته باشد: ' + e.toString());
+    }
+  }
+
   Future<void> _showDocumentDetails(OfficialNews item) async {
     await showModalBottomSheet<void>(
       context: context,
@@ -323,6 +343,11 @@ class _NewsHomeState extends State<NewsHome> with WidgetsBindingObserver {
                 ),
                 const SizedBox(height: 16),
                 FilledButton.icon(
+                  onPressed: () => _extractForAnalysis(item, sheetContext),
+                  icon: const Icon(Icons.manage_search),
+                  label: const Text('دریافت متن و رفتن به تحلیل ماده'),
+                ),
+                OutlinedButton.icon(
                   onPressed: () {
                     Navigator.of(sheetContext).pop();
                     _openOfficialUrl(item.url);
