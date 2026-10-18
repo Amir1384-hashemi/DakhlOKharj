@@ -93,11 +93,20 @@ class QanunBanStore {
     }
   }
 
-  Future<void> cacheDocuments(List<OfficialNews> documents) async {
+  Set<String> get latestFeedIds =>
+      (_prefs.getStringList('latest_feed_ids_v2') ?? const <String>[]).toSet();
+
+  Future<void> cacheDocuments(
+    List<OfficialNews> documents, {
+    Iterable<String>? latestIds,
+  }) async {
     await _prefs.setString(
       'cached_documents_v2',
       jsonEncode(documents.map((d) => d.toJson()).toList()),
     );
+    if (latestIds != null) {
+      await _prefs.setStringList('latest_feed_ids_v2', latestIds.toSet().toList());
+    }
   }
 
   Set<String> get savedIds =>
