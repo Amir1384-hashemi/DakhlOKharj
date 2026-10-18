@@ -120,5 +120,5 @@ jobs:
             --notes "Operational beta: official-feed reader, persisted bookmarks and alert history, Android local notifications during successful refresh, configurable watched categories, and deterministic Persian legal-text extraction. Background monitoring when app is closed and cloud AI analysis are not included. Minimum Android 7." \
             --prerelease \
             --target "$GITHUB_SHA"
-          gh release view "qanunban-public-beta-v1.0.0" --json url,assets \
+          gh release view "qanunban-operational-beta-v1.1.0" --json url,assets \
             --jq '{url:.url,download_links:[.assets[].url]}'
