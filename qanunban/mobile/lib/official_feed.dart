@@ -153,7 +153,7 @@ List<OfficialNews> parseOfficialNews(String htmlBody, {Uri? baseUri}) {
       ids.remove(id);
       continue;
     }
-    final container = anchor.closest('article, li, .card, .news-item, .document-item, .item');
+    final container = _containerFor(anchor);
     final time = container?.querySelector('time, [datetime], .date, .published-at');
     final summaryElement = container?.querySelector('p, .summary, .description, .excerpt');
     final summary = _clean(summaryElement?.text ?? '');
