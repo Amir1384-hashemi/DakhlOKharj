@@ -1,0 +1,47 @@
+name: Test Windows native Android signing key (no local Java)
+on:
+  push:
+    branches: [engineering-calculator-paid-rc]
+    paths:
+      - '.github/workflows/windows-native-signing-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native-key:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - name: Generate Windows-only RSA PFX and validate Java PKCS12 compatibility
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $pass = 'CI-' + [guid]::NewGuid().ToString('N') + '!AB'
+          $pw = ConvertTo-SecureString $pass -AsPlainText -Force
+          $target = Join-Path $env:RUNNER_TEMP 'engineering-calculator-signing-check.pfx'
+          $cert = New-SelfSignedCertificate -Type Custom `
+            -Subject 'CN=Engineering Calculator, O=Engineering Calculator' `
+            -CertStoreLocation 'Cert:\CurrentUser\My' `
+            -KeyAlgorithm RSA -KeyLength 3072 -HashAlgorithm SHA256 `
+            -KeyExportPolicy Exportable -KeyUsage DigitalSignature -KeySpec Signature `
+            -NotAfter (Get-Date).AddYears(25) -FriendlyName 'engineeringcalculator'
+          if (-not $cert.HasPrivateKey) { throw 'No private key generated' }
+          Export-PfxCertificate -Cert $cert -FilePath $target -Password $pw -Force | Out-Null
+          if ((Get-Item $target).Length -lt 500) { throw 'PFX missing or too short' }
+          $listing = & keytool -list -keystore $target -storetype PKCS12 -storepass $pass 2>&1
+          if ($LASTEXITCODE -ne 0) { throw 'Java could not open Windows PKCS12 key' }
+          $line = $listing | Where-Object { $_ -match 'PrivateKeyEntry' } | Select-Object -First 1
+          if (-not $line) { throw 'No private key entry in Java keystore' }
+          $alias = ($line -split ',')[0].Trim()
+          Set-Content -Path (Join-Path $env:RUNNER_TEMP 'ci-signing-test.txt') -Value 'test payload'
+          Push-Location $env:RUNNER_TEMP
+          & jar --create --file signing-test.jar ci-signing-test.txt
+          if ($LASTEXITCODE -ne 0) { throw 'Could not create test jar' }
+          & jarsigner -keystore $target -storetype PKCS12 -storepass $pass -keypass $pass signing-test.jar $alias
+          if ($LASTEXITCODE -ne 0) { throw 'Could not sign jar with Windows-native key' }
+          & jarsigner -verify signing-test.jar
+          if ($LASTEXITCODE -ne 0) { throw 'Java signature verification failed' }
+          Pop-Location
+          Write-Output 'Windows native key generated; Java PKCS12 read, signing and verification succeeded.'
