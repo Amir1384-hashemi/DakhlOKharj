@@ -1,13 +1,13 @@
 plugins { id 'com.android.application' }
 android {
   namespace 'com.trazyar.level'
-  compileSdk 35
+  compileSdk 36
   defaultConfig {
     applicationId 'com.trazyar.level'
     minSdk 26
-    targetSdk 34
-    versionCode 21
-    versionName '4.1'
+    targetSdk 36
+    versionCode 22
+    versionName '4.2'
   }
   buildTypes {
     release {

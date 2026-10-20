@@ -18,7 +18,7 @@ jobs:
           SDKMANAGER=$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | head -n 1)
           test -x "$SDKMANAGER"
           yes | "$SDKMANAGER" --licenses >/dev/null || true
-          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0"
+          "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0"
       - name: Verify slope, angle and square mathematics
         run: |
           mkdir -p /tmp/trazyar-classes
@@ -68,16 +68,16 @@ jobs:
       - name: Package unsigned release and Android signing utility
         run: |
           mkdir -p /tmp/trazyar-release
-          cp TrazYarInstaller/app/build/outputs/apk/release/app-release-unsigned.apk /tmp/trazyar-release/TrazYar_v4_1_Release_UNSIGNED.apk
-          test -s /tmp/trazyar-release/TrazYar_v4_1_Release_UNSIGNED.apk
-          test -s "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar"
-          cp "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar" /tmp/trazyar-release/apksigner.jar
+          cp TrazYarInstaller/app/build/outputs/apk/release/app-release-unsigned.apk /tmp/trazyar-release/TrazYar_v4_2_Release_UNSIGNED.apk
+          test -s /tmp/trazyar-release/TrazYar_v4_2_Release_UNSIGNED.apk
+          test -s "$ANDROID_HOME/build-tools/36.0.0/lib/apksigner.jar"
+          cp "$ANDROID_HOME/build-tools/36.0.0/lib/apksigner.jar" /tmp/trazyar-release/apksigner.jar
           cp TrazYarInstaller/STORE_RELEASE_CHECKLIST_FA.md /tmp/trazyar-release/STORE_RELEASE_CHECKLIST_FA.md
           cp TrazYarInstaller/PRIVACY_POLICY_FA.md /tmp/trazyar-release/PRIVACY_POLICY_FA.md
           cp TrazYarInstaller/STORE_LISTING_FA.md /tmp/trazyar-release/STORE_LISTING_FA.md
       - uses: actions/upload-artifact@v4
         with:
-          name: TrazYar-v4_1-unsigned-release-private-signing
+          name: TrazYar-v4_2-unsigned-release-private-signing
           path: /tmp/trazyar-release/
           retention-days: 5
       - name: Enable Android emulator hardware acceleration
@@ -88,7 +88,7 @@ jobs:
       - name: Android emulator UI smoke tests (all tools and walkthroughs)
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 30
+          api-level: 36
           target: google_apis
           arch: x86_64
           profile: pixel_5
