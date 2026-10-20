@@ -55,22 +55,51 @@ jobs:
       - name: Run scientific, civil engineering and UI tests
         working-directory: ${{ env.BUILD_DIR }}
         run: flutter test --reporter expanded
-      - name: Produce unlisted QA package only
+      - name: Dry-run production signing using throwaway QA-only key
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          qa_key="$(mktemp --suffix=.jks)"
+          qa_password="$(openssl rand -hex 24)"
+          trap 'rm -f "$qa_key"' EXIT
+          keytool -genkeypair -noprompt -keystore "$qa_key" -storetype JKS \
+            -storepass "$qa_password" -keypass "$qa_password" \
+            -alias paid-store-staging-key -keyalg RSA -keysize 3072 -validity 365 \
+            -dname 'CN=Temporary CI Test Key,OU=QA,O=EngineeringCalculator,C=IR' >/dev/null 2>&1
+          export ENGINEERING_CALCULATOR_KEYSTORE_BASE64="$(base64 -w 0 "$qa_key")"
+          export ENGINEERING_CALCULATOR_KEYSTORE_PASSWORD="$qa_password"
+          export ENGINEERING_CALCULATOR_KEY_ALIAS='paid-store-staging-key'
+          export ENGINEERING_CALCULATOR_KEY_PASSWORD="$qa_password"
+          python3 ci/engineering-calculator-store/configure_signing.py
+          unset ENGINEERING_CALCULATOR_KEYSTORE_BASE64 ENGINEERING_CALCULATOR_KEYSTORE_PASSWORD
+          unset ENGINEERING_CALCULATOR_KEY_ALIAS ENGINEERING_CALCULATOR_KEY_PASSWORD
+      - name: Build signed staging APK and AAB
         working-directory: ${{ env.BUILD_DIR }}
-        run: flutter build apk --release
-      - name: Check QA artifact and signature (NOT a store production signature)
+        run: |
+          flutter build apk --release
+          flutter build appbundle --release
+      - name: Verify staging artifacts, identities, signatures and integrity
         shell: bash
         run: |
           set -euo pipefail
           APK="$BUILD_DIR/build/app/outputs/flutter-apk/app-release.apk"
+          AAB="$BUILD_DIR/build/app/outputs/bundle/release/app-release.aab"
           test -s "$APK"
+          test -s "$AAB"
           APKSIGNER=$(find "${ANDROID_HOME:-/usr/local/lib/android/sdk}/build-tools" -maxdepth 2 -name apksigner -type f | sort -V | tail -1)
-          "$APKSIGNER" verify "$APK"
-          sha256sum "$APK"
-      - name: Keep QA build as unlisted GitHub Actions artifact
+          AAPT=$(find "${ANDROID_HOME:-/usr/local/lib/android/sdk}/build-tools" -maxdepth 2 -name aapt -type f | sort -V | tail -1)
+          test -n "$APKSIGNER" && test -n "$AAPT"
+          "$APKSIGNER" verify --verbose --print-certs "$APK"
+          "$AAPT" dump badging "$APK" | grep -F "package: name='ir.omranyar.engineeringcalculator' versionCode='10' versionName='1.0.0'"
+          jarsigner -verify "$AAB"
+          sha256sum "$APK" "$AAB"
+      - name: Keep staging binaries as short-lived GitHub Actions artifacts
         uses: actions/upload-artifact@v4
         with:
           name: EngineeringCalculator-Staging-DoNotDistribute
-          path: omranyar_flutter/build/app/outputs/flutter-apk/app-release.apk
-          retention-days: 7
+          path: |
+            omranyar_flutter/build/app/outputs/flutter-apk/app-release.apk
+            omranyar_flutter/build/app/outputs/bundle/release/app-release.aab
+          retention-days: 3
           if-no-files-found: error
