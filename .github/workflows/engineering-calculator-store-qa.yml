@@ -60,9 +60,10 @@ jobs:
         run: |
           set -euo pipefail
           umask 077
-          qa_key="$(mktemp --suffix=.jks)"
+          qa_tmpdir="$(mktemp -d)"
+          qa_key="$qa_tmpdir/staging-signing.jks"
           qa_password="$(openssl rand -hex 24)"
-          trap 'rm -f "$qa_key"' EXIT
+          trap 'rm -rf "$qa_tmpdir"' EXIT
           keytool -genkeypair -noprompt -keystore "$qa_key" -storetype JKS \
             -storepass "$qa_password" -keypass "$qa_password" \
             -alias paid-store-staging-key -keyalg RSA -keysize 3072 -validity 365 \
