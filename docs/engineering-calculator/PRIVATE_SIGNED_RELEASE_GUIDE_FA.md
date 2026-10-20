@@ -10,6 +10,20 @@
 
 کلید امضای دائمی را فقط صاحب برنامه ایجاد و نگهداری کند. کلید/رمز را هرگز در چت، Issue، کد، فایل APK یا مستندات عمومی نفرستید. از کلید و رمزها در محلی امن و مستقل نسخه پشتیبان تهیه شود؛ گم‌کردن آن ممکن است مسیر انتشار به‌روزرسانی‌ها را مختل کند.
 
+## روش جایگزین ویندوز: بدون نصب Java (پیشنهادی)
+
+اگر لپ‌تاپ Windows 10/11 دارید و دانلود JDK مشکل است، می‌توان با ابزارهای **داخلی ویندوز** یک گواهی RSA 3072 دارای کلید خصوصی را به صورت `.pfx` صادر کرد. این فایل نوع **PKCS12** است و Gradle/Java در محیط ابری آن را برای امضای اندروید می‌خوانند؛ نیازی به Java روی لپ‌تاپ نیست. سازگاری این روش با Java و امضای JAR در GitHub Actions آزمایش شده است: https://github.com/Amir1384-hashemi/DakhlOKharj/actions/runs/39446680386 .
+
+در بسته ابزار Windows که در گفتگو ارائه شده، بعد از Extract All، فایل `START_CREATE_KEY.cmd` را اجرا کرده و رمز قوی حداقل ۱۶ کاراکتری را دو بار وارد کنید. کلید در `Documents\\EngineeringCalculator\\engineering-calculator-release.pfx` ذخیره می‌شود. کلید/رمز را فقط خودتان نگه دارید و در چت ارسال نکنید. وجود `.pfx` به معنای آماده‌شدن حساب فروشگاهی نیست.
+
+در نسخه جدید `configure_signing.py` نوع فایل JKS یا PFX خودکار تشخیص داده می‌شود و برای PFX، **alias از داخل فایل در محیط ابری پیدا می‌شود**. بنابراین لازم نیست صاحب برنامه برای پیدا کردن alias روی ویندوز Java نصب کند. برای نسخه PFX معمولاً دو GitHub Actions Secret کافی است: `ENGINEERING_CALCULATOR_KEYSTORE_BASE64` و `ENGINEERING_CALCULATOR_KEYSTORE_PASSWORD`. دو Secret alias/key password در صورت نیاز برای فایل‌های قدیمی JKS اختیاری‌اند.
+
+برای تهیه Base64 در Windows PowerShell فقط **در دستگاه خودتان** از دستور زیر استفاده کنید و نتیجه را مستقیماً در **GitHub Secrets مخزن خصوصی** وارد کنید، نه در چت یا فایل‌های عمومی:
+
+```powershell
+[Convert]::ToBase64String([IO.File]::ReadAllBytes((Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'EngineeringCalculator\\engineering-calculator-release.pfx')))
+```
+
 ## ساخت کلید امضای دائمی در رایانه شخصی
 اگر keystore دائمی مخصوص همین برنامه وجود ندارد، روی رایانه‌ای امن با JDK اجرا کنید:
 
@@ -31,7 +45,7 @@ keytool -genkeypair -v \
 3. `ENGINEERING_CALCULATOR_KEY_ALIAS`: نام alias
 4. `ENGINEERING_CALCULATOR_KEY_PASSWORD`: رمز کلید
 
-برای تولید Base64 روی Linux از `base64 -w 0 engineering-calculator-release.jks`، روی macOS از `base64 < engineering-calculator-release.jks | tr -d '\\n'` و روی Windows PowerShell از `[Convert]::ToBase64String([IO.File]::ReadAllBytes("engineering-calculator-release.jks"))` استفاده کنید. **خروجی Base64 هم محرمانه است.**
+برای فایل‌های JKS قدیمی نیز می‌توان به همین روش از Base64 استفاده کرد. برای تولید Base64 روی Linux از `base64 -w 0 engineering-calculator-release.jks`، روی macOS از `base64 < engineering-calculator-release.jks | tr -d '\\n'` و روی Windows PowerShell از `[Convert]::ToBase64String([IO.File]::ReadAllBytes("engineering-calculator-release.jks"))` استفاده کنید. **خروجی Base64 هم محرمانه است.**
 
 ## اجرای خروجی تجاری
 Workflow موجود: `.github/workflows/engineering-calculator-signed-release.yml`.
