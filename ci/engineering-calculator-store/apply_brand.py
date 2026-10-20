@@ -18,6 +18,7 @@ replace(Path("tools/apply_branding.py"),"عمران‌یار","ماشین حسا
 replace(Path("tools/apply_branding.py"),"OmranYar","Engineering Calculator",1)
 replace(Path("pubspec.yaml"),"version: 0.8.0+6","version: 1.0.0+10")
 replace(Path("test/qa_ui_smoke_test.dart"),"find.text('عمران‌یار')","find.text('ماشین حساب مهندسی')")
+replace(Path("test/widget_test.dart"),"find.text('عمران‌یار')","find.text('ماشین حساب مهندسی')")
 # Strict check: no obsolete display label remains in these production files.
 assert "عمران‌یار" not in (ROOT/"lib/main.dart").read_text(encoding="utf-8")
 print("Engineering Calculator | one-time paid download | branded source ready")
