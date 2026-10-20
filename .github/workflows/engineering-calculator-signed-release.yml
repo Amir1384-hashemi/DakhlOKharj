@@ -1,0 +1,80 @@
+name: Engineering Calculator | signed paid-store release
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  signed-store-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    env:
+      BUILD_DIR: omranyar_flutter
+    steps:
+      - uses: actions/checkout@v4
+      - name: Restore validated Flutter source and tests
+        run: |
+          set -euo pipefail
+          mkdir -p "$BUILD_DIR"
+          base64 -d ci/omranyar-beta/source.tar.xz.b64 | tar -xJ -C "$BUILD_DIR"
+          base64 -d ci/omranyar-beta/truss_patch.tar.xz.b64 | tar -xJ -C "$BUILD_DIR"
+          cp ci/omranyar-beta/qa_regression_test.dart "$BUILD_DIR/test/qa_regression_test.dart"
+          cp ci/omranyar-beta/qa_ui_smoke_test.dart "$BUILD_DIR/test/qa_ui_smoke_test.dart"
+          python3 ci/omranyar-beta/qa_math_fixes.py
+          python3 ci/engineering-calculator-store/apply_brand.py
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Generate Android project and apply native branding
+        working-directory: ${{ env.BUILD_DIR }}
+        run: |
+          flutter create --org ir.omranyar --platforms=android --project-name omran_yar .
+          python3 tools/apply_branding.py
+          grep -q 'android:label="ماشین حساب مهندسی"' android/app/src/main/AndroidManifest.xml
+      - name: Install dependencies and rerun all release QA
+        working-directory: ${{ env.BUILD_DIR }}
+        run: |
+          flutter pub add --dev flutter_lints
+          flutter pub get
+          flutter analyze --no-fatal-infos
+          flutter test --reporter expanded
+      - name: Inject production signing key from GitHub Secrets
+        env:
+          ENGINEERING_CALCULATOR_KEYSTORE_BASE64: ${{ secrets.ENGINEERING_CALCULATOR_KEYSTORE_BASE64 }}
+          ENGINEERING_CALCULATOR_KEYSTORE_PASSWORD: ${{ secrets.ENGINEERING_CALCULATOR_KEYSTORE_PASSWORD }}
+          ENGINEERING_CALCULATOR_KEY_ALIAS: ${{ secrets.ENGINEERING_CALCULATOR_KEY_ALIAS }}
+          ENGINEERING_CALCULATOR_KEY_PASSWORD: ${{ secrets.ENGINEERING_CALCULATOR_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          python3 ci/engineering-calculator-store/configure_signing.py
+      - name: Build signed paid-store APK and AAB
+        working-directory: ${{ env.BUILD_DIR }}
+        run: |
+          flutter build apk --release
+          flutter build appbundle --release
+      - name: Verify release signing and checksum
+        run: |
+          set -euo pipefail
+          APK="$BUILD_DIR/build/app/outputs/flutter-apk/app-release.apk"
+          AAB="$BUILD_DIR/build/app/outputs/bundle/release/app-release.aab"
+          test -s "$APK"
+          test -s "$AAB"
+          APKSIGNER=$(find "${ANDROID_HOME:-/usr/local/lib/android/sdk}/build-tools" -maxdepth 2 -name apksigner -type f | sort -V | tail -1)
+          "$APKSIGNER" verify --print-certs "$APK"
+          sha256sum "$APK" "$AAB" > SHA256SUMS.txt
+      - name: Upload release files as limited-access artifacts (do NOT publish public APK)
+        uses: actions/upload-artifact@v4
+        with:
+          name: EngineeringCalculator-PaidStore-1.0.0-Signed
+          path: |
+            omranyar_flutter/build/app/outputs/flutter-apk/app-release.apk
+            omranyar_flutter/build/app/outputs/bundle/release/app-release.aab
+            SHA256SUMS.txt
+          retention-days: 7
+          if-no-files-found: error
