@@ -123,18 +123,17 @@ public class MainActivity extends Activity implements SensorEventListener {
     appIntro.setBackground(background(PANEL,0xff376D50,13));
     root.addView(appIntro);
     gap(root,9);
-    Button privacyButton=button("🔒 دربارهٔ نسخهٔ پولی و حریم خصوصی",false);
+    Button privacyButton=button("🔒 حریم خصوصی و اطلاعات برنامه",false);
     privacyButton.setTextSize(13);
     root.addView(privacyButton,new LinearLayout.LayoutParams(-1,px(47)));
     privacyButton.setOnClickListener(v->new AlertDialog.Builder(this)
-      .setTitle("تراز یار حرفه‌ای • حریم خصوصی")
-      .setMessage("نسخهٔ پولی یک‌بار از مایکت یا بازار خریداری می‌شود و تمام ابزارها بدون پرداخت اضافه فعال‌اند. "+
-        "برنامه آفلاین است، اینترنت و ورود به حساب کاربری لازم ندارد و تبلیغ یا تحلیل‌گر رفتاری ندارد. "+
-        "اندازه‌گیری‌ها، نام پروژه‌ها و کالیبراسیون فقط در حافظهٔ خصوصی همین گوشی ذخیره می‌شوند. "+
-        "اشتراک گزارش تنها با انتخاب شما و از طریق برنامهٔ مقصد انجام می‌شود. "+
-        "با پاک‌کردن داده‌های برنامه، دفترچه و تنظیمات حذف می‌شوند. "+
+      .setTitle("تراز یار • حریم خصوصی")
+      .setMessage("تراز یار آفلاین است و به اینترنت یا ساخت حساب کاربری نیاز ندارد. تبلیغات و ابزارهای ردیابی ندارد. "+
+        "اندازه‌گیری‌ها، نام پروژه‌ها و تنظیمات کالیبراسیون فقط در حافظهٔ خصوصی همین گوشی ذخیره می‌شوند. "+
+        "با انتخاب شما می‌توانید گزارش را به برنامه‌ای دیگر بفرستید. "+
+        "با پاک‌کردن داده‌های برنامه، دفترچه و تنظیمات نیز حذف می‌شوند. "+
         "برای کارهای حساس، دقت حسگر را با ابزار مرجع کنترل کنید.")
-      .setPositiveButton("متوجه شدم",null).show());
+      .setPositiveButton("بستن",null).show());
     gap(root,9);
     Button guideEntry=button("📚 معرفی برنامه و مرکز آموزش کامل",false);
     guideEntry.setTextSize(16);
@@ -263,7 +262,7 @@ public class MainActivity extends Activity implements SensorEventListener {
     holdButton.setOnClickListener(v->toggleFreeze());
     saveButton.setOnClickListener(v->saveCurrentMeasurement());
     historyButton.setOnClickListener(v->showHistory());
-    panel.addView(text("عدد را قفل کنید، با نام پروژه ذخیره کنید و گزارش را به اشتراک بگذارید.",12,MUTED));
+    panel.addView(text("عدد را قفل کنید، با نام پروژه ذخیره کنید و گزارش را ارسال کنید.",12,MUTED));
     gap(panel,13);
     updateModeUI();
 
@@ -332,7 +331,7 @@ public class MainActivity extends Activity implements SensorEventListener {
         refreshBeep();
       }).show());
     gap(root,12);root.addView(text("زاویه‌سنج و گونیا: گوشی را با صفحهٔ قائم نگه دارید. در گونیا، ضلع اول را ثبت کنید و برای ضلع دوم، گوشی را در همان صفحه بچرخانید. چرخش روی میز افقی با حسگر گرانش اندازه‌گیری نمی‌شود.",12,MUTED));
-    gap(root,12);root.addView(text("تراز یار • نسخهٔ ۴٫۰ • انتشار پولی ویژهٔ بازار و مایکت",11,GOLD));
+    gap(root,12);root.addView(text("تراز یار • نسخهٔ ۴٫۱ • ابزارهای اندازه‌گیری و نصب",11,GOLD));
   }
   void openTutorial(int firstPage){
     if(tutorialOpen)return;
@@ -494,7 +493,7 @@ public class MainActivity extends Activity implements SensorEventListener {
     new AlertDialog.Builder(this)
       .setTitle("دفترچه اندازه‌گیری‌ها ("+items.size()+")")
       .setItems(names,(d,which)->showRecord(items.get(which)))
-      .setPositiveButton("اشتراک کل گزارش",(d,which)->shareText(MeasurementLog.exportText(items)))
+      .setPositiveButton("ارسال کل گزارش",(d,which)->shareText(MeasurementLog.exportText(items)))
       .setNeutralButton("پاک‌کردن همه",(d,which)->{
         new AlertDialog.Builder(this)
           .setTitle("حذف دفترچه")
@@ -511,7 +510,7 @@ public class MainActivity extends Activity implements SensorEventListener {
     new AlertDialog.Builder(this)
       .setTitle(entry.tool+" — "+entry.value)
       .setMessage(MeasurementLog.text(entry))
-      .setPositiveButton("اشتراک‌گذاری",(d,w)->shareText(MeasurementLog.text(entry)))
+      .setPositiveButton("ارسال گزارش",(d,w)->shareText(MeasurementLog.text(entry)))
       .setNeutralButton("کپی",(d,w)->{
         ClipboardManager clipboard=(ClipboardManager)getSystemService(Context.CLIPBOARD_SERVICE);
         if(clipboard!=null)clipboard.setPrimaryClip(ClipData.newPlainText("اندازه‌گیری تراز یار",MeasurementLog.text(entry)));
@@ -523,7 +522,7 @@ public class MainActivity extends Activity implements SensorEventListener {
     Intent i=new Intent(Intent.ACTION_SEND);
     i.setType("text/plain");i.putExtra(Intent.EXTRA_TEXT,report);
     try{startActivity(Intent.createChooser(i,"ارسال گزارش تراز یار"));}
-    catch(Exception ex){Toast.makeText(this,"برنامه‌ای برای اشتراک‌گذاری یافت نشد",Toast.LENGTH_SHORT).show();}
+    catch(Exception ex){Toast.makeText(this,"برنامه‌ای برای ارسال گزارش پیدا نشد",Toast.LENGTH_SHORT).show();}
   }
 
   void startMeasure() {

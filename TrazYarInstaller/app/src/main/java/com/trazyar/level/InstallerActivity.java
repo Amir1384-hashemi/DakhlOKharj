@@ -194,7 +194,7 @@ public final class InstallerActivity extends Activity implements SensorEventList
 
     LinearLayout sharePanel=panel(root);
     sharePanel.addView(text("مرحله ۴ • گزارش کار را تحویل دهید",18,GOLD));
-    Button report=button("↗ اشتراک گزارش قبل و بعد",true);
+    Button report=button("↗ ارسال گزارش قبل و بعد",true);
     sharePanel.addView(report,new LinearLayout.LayoutParams(-1,dp(55)));
     shareBtn=report;
     shareBtn.setOnClickListener(v->shareReport());
@@ -209,7 +209,7 @@ public final class InstallerActivity extends Activity implements SensorEventList
     reset.setOnClickListener(v->confirmReset());
     sharePanel.addView(text("این محاسبات فقط روی سطح صلب و تخت و با هم‌راستایی گوشی معتبرترند. تاب سطح، لق‌بودن بدنه و مقدار واقعی چرخش پیچ هر پایه با حسگر گوشی سنجیده نمی‌شوند؛ برای نصب حساس با تراز مرجع کنترل کنید.",12,MUTED));
     gap(root,18);
-    root.addView(text("تراز یار ۴٫۰ • نسخهٔ کامل پولی و آفلاین",12,GOLD));
+    root.addView(text("تراز یار ۴٫۱ • نصاب‌یار حرفه‌ای و آفلاین",12,GOLD));
     if(sensor==null){
       liveLabel.setText("این گوشی حسگر گرانش/شتاب‌سنج قابل استفاده ندارد.");
       beforeBtn.setEnabled(false);afterBtn.setEnabled(false);
@@ -339,7 +339,7 @@ public final class InstallerActivity extends Activity implements SensorEventList
       if(second){
         new AlertDialog.Builder(this).setTitle("اندازه‌گیری بعد ثبت شد")
           .setMessage(String.format(Locale.US,
-            "بیشترین اختلاف قبل: %.1f میلی‌متر\nبعد: %.1f میلی‌متر\nحالا گزارش قابل اشتراک‌گذاری است.",
+            "بیشترین اختلاف قبل: %.1f میلی‌متر\nبعد: %.1f میلی‌متر\nگزارش آمادهٔ ارسال است.",
             before.maxRaiseMm,after.maxRaiseMm))
           .setPositiveButton("بسیار خوب",null).show();
       }else{
@@ -417,7 +417,7 @@ public final class InstallerActivity extends Activity implements SensorEventList
     send.setType("text/plain");
     send.putExtra(Intent.EXTRA_TEXT,report);
     try{startActivity(Intent.createChooser(send,"ارسال گزارش نصاب‌یار"));}
-    catch(Exception ex){ToastMsg("برنامه‌ای برای اشتراک‌گذاری پیدا نشد.");}
+    catch(Exception ex){ToastMsg("برنامه‌ای برای ارسال گزارش پیدا نشد.");}
   }
   void addToJournal(){
     if(before==null){ToastMsg("ابتدا وضعیت قبل را ثبت کنید.");return;}

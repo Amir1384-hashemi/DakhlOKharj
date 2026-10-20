@@ -78,7 +78,7 @@ jobs:
       - name: Upload authentic Android emulator store screenshots
         uses: actions/upload-artifact@v4
         with:
-          name: TrazYar-v4-store-screenshots
+          name: TrazYar-v4_1-store-screenshots
           path: TrazYarInstaller/store_assets/screenshots/
           retention-days: 5
       - name: Build unsigned release APK for private owner signing
@@ -89,7 +89,7 @@ jobs:
       - name: Package unsigned release and Android signing utility
         run: |
           mkdir -p /tmp/trazyar-release
-          cp TrazYarInstaller/app/build/outputs/apk/release/app-release-unsigned.apk /tmp/trazyar-release/TrazYar_v4_0_Release_UNSIGNED.apk
+          cp TrazYarInstaller/app/build/outputs/apk/release/app-release-unsigned.apk /tmp/trazyar-release/TrazYar_v4_1_Release_UNSIGNED.apk
           test -s /tmp/trazyar-release/TrazYar_v4_0_Release_UNSIGNED.apk
           test -s "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar"
           cp "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar" /tmp/trazyar-release/apksigner.jar
@@ -98,6 +98,6 @@ jobs:
           cp TrazYarInstaller/STORE_LISTING_FA.md /tmp/trazyar-release/STORE_LISTING_FA.md
       - uses: actions/upload-artifact@v4
         with:
-          name: TrazYar-v4-unsigned-release-private-signing
+          name: TrazYar-v4_1-unsigned-release-private-signing
           path: /tmp/trazyar-release/
           retention-days: 5

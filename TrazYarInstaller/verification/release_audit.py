@@ -9,8 +9,8 @@ badging=subprocess.check_output([tool,"dump","badging",apk],text=True)
 perms=subprocess.check_output([tool,"dump","permissions",apk],text=True)
 xml=subprocess.check_output([tool,"dump","xmltree",apk,"AndroidManifest.xml"],text=True)
 assert "name='com.trazyar.level'" in badging,badging[:200]
-assert "versionCode='20'" in badging,badging[:200]
-assert "versionName='4.0'" in badging,badging[:200]
+assert "versionCode='21'" in badging,badging[:200]
+assert "versionName='4.1'" in badging,badging[:200]
 assert "sdkVersion:'26'" in badging,badging[:200]
 assert "targetSdkVersion:'34'" in badging,badging[:200]
 assert "android.permission.VIBRATE" in perms,"Expected vibration permission missing"
