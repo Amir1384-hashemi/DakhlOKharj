@@ -61,17 +61,15 @@ jobs:
           set -euo pipefail
           umask 077
           qa_tmpdir="$(mktemp -d)"
-          qa_key="$qa_tmpdir/staging-signing.jks"
+          qa_key="$qa_tmpdir/staging-signing.p12"
           qa_password="$(openssl rand -hex 24)"
           trap 'rm -rf "$qa_tmpdir"' EXIT
-          keytool -genkeypair -noprompt -keystore "$qa_key" -storetype JKS \
+          keytool -genkeypair -noprompt -keystore "$qa_key" -storetype PKCS12 \
             -storepass "$qa_password" -keypass "$qa_password" \
             -alias paid-store-staging-key -keyalg RSA -keysize 3072 -validity 365 \
             -dname 'CN=Temporary CI Test Key,OU=QA,O=EngineeringCalculator,C=IR' >/dev/null 2>&1
           export ENGINEERING_CALCULATOR_KEYSTORE_BASE64="$(base64 -w 0 "$qa_key")"
           export ENGINEERING_CALCULATOR_KEYSTORE_PASSWORD="$qa_password"
-          export ENGINEERING_CALCULATOR_KEY_ALIAS='paid-store-staging-key'
-          export ENGINEERING_CALCULATOR_KEY_PASSWORD="$qa_password"
           python3 ci/engineering-calculator-store/configure_signing.py
           unset ENGINEERING_CALCULATOR_KEYSTORE_BASE64 ENGINEERING_CALCULATOR_KEYSTORE_PASSWORD
           unset ENGINEERING_CALCULATOR_KEY_ALIAS ENGINEERING_CALCULATOR_KEY_PASSWORD
