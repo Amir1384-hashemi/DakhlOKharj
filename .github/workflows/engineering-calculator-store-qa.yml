@@ -41,6 +41,9 @@ jobs:
         run: |
           flutter create --org ir.omranyar --platforms=android --project-name omran_yar .
           python3 tools/apply_branding.py
+          cd ..
+          python3 ci/engineering-calculator-store/set_paid_application_id.py
+          cd "$BUILD_DIR"
           grep -q 'android:label="ماشین حساب مهندسی"' android/app/src/main/AndroidManifest.xml
           grep -q 'version: 1.0.0+10' pubspec.yaml
       - name: Install dependencies and lint
