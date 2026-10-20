@@ -40,11 +40,12 @@ if raw.count(old)!=1:
 if raw.count("android {")!=1:
     raise SystemExit("Android Gradle configuration not recognized.")
 inject="""
-val paidStoreKeystoreProperties = java.util.Properties()
+val paidStoreKeystoreProperties = Properties()
 val paidStoreKeystorePropertiesFile = rootProject.file("key.properties")
 paidStoreKeystorePropertiesFile.inputStream().use { paidStoreKeystoreProperties.load(it) }
 
 """
+raw="import java.util.Properties\n"+raw
 raw=raw.replace("android {",inject+"""android {
     signingConfigs {
         create("release") {
