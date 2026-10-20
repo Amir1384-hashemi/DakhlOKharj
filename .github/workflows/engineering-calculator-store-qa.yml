@@ -1,0 +1,73 @@
+name: Engineering Calculator | paid-store candidate QA
+on:
+  push:
+    branches: [engineering-calculator-paid-rc]
+    paths:
+      - 'ci/engineering-calculator-store/**'
+      - '.github/workflows/engineering-calculator-store-qa.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pre-release-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      BUILD_DIR: omranyar_flutter
+    steps:
+      - uses: actions/checkout@v4
+      - name: Restore last-tested Flutter source
+        run: |
+          set -euo pipefail
+          mkdir -p "$BUILD_DIR"
+          base64 -d ci/omranyar-beta/source.tar.xz.b64 | tar -xJ -C "$BUILD_DIR"
+          base64 -d ci/omranyar-beta/truss_patch.tar.xz.b64 | tar -xJ -C "$BUILD_DIR"
+          cp ci/omranyar-beta/qa_regression_test.dart "$BUILD_DIR/test/qa_regression_test.dart"
+          cp ci/omranyar-beta/qa_ui_smoke_test.dart "$BUILD_DIR/test/qa_ui_smoke_test.dart"
+          python3 ci/omranyar-beta/qa_math_fixes.py
+          python3 ci/engineering-calculator-store/apply_brand.py
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Generate Android project, set app label and icon
+        working-directory: ${{ env.BUILD_DIR }}
+        run: |
+          flutter create --org ir.omranyar --platforms=android --project-name omran_yar .
+          python3 tools/apply_branding.py
+          grep -q 'android:label="ماشین حساب مهندسی"' android/app/src/main/AndroidManifest.xml
+          grep -q 'version: 1.0.0+10' pubspec.yaml
+      - name: Install dependencies and lint
+        working-directory: ${{ env.BUILD_DIR }}
+        run: |
+          flutter pub add --dev flutter_lints
+          flutter pub get
+          flutter analyze --no-fatal-infos
+      - name: Run scientific, civil engineering and UI tests
+        working-directory: ${{ env.BUILD_DIR }}
+        run: flutter test --reporter expanded
+      - name: Produce unlisted QA package only
+        working-directory: ${{ env.BUILD_DIR }}
+        run: flutter build apk --release
+      - name: Check QA artifact and signature (NOT a store production signature)
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="$BUILD_DIR/build/app/outputs/flutter-apk/app-release.apk"
+          test -s "$APK"
+          APKSIGNER=$(find "${ANDROID_HOME:-/usr/local/lib/android/sdk}/build-tools" -maxdepth 2 -name apksigner -type f | sort -V | tail -1)
+          "$APKSIGNER" verify "$APK"
+          sha256sum "$APK"
+      - name: Keep QA build as unlisted GitHub Actions artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: EngineeringCalculator-Staging-DoNotDistribute
+          path: omranyar_flutter/build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 7
+          if-no-files-found: error
